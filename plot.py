@@ -4,6 +4,7 @@ from matplotlib import animation
 import imageio
 import io
 from tqdm import tqdm
+import multiprocessing as mp
 
 # Constants
 LIMX = 60
@@ -56,29 +57,29 @@ for _ in range(25):
         f.write(buf.getvalue())
     buf.close()
 
-# Main animation loop
-for iter in tqdm(range(600), desc="Processing frames"):
-    ax.clear()
+
+def process_frame(iter):
+    fig = plt.figure(figsize=(10, 7.5))
+    ax = fig.add_subplot(111, projection='3d')
     ax.set_xlim([0, LIMY * delY])
     ax.set_ylim([0, LIMX * delX])
     ax.set_zlim([-1, 1])
     ax.set_xlabel('y-axis (m)')
     ax.set_ylabel('x-axis (m)')
     ax.set_zlabel('E_z (V/m)')
+
     # Read data file
     filename = f'junk/junk.{iter}'
     try:
         A = np.loadtxt(filename)
     except:
         print(f"Could not read file {filename}")
-        continue
+        return
 
     # Reshape data into B matrix
     B = np.zeros((LIMX, LIMY))
     for a in range(LIMX):
         B[a, :] = A[a*LIMY:(a+1)*LIMY]
-
-    # Clear previous surface
 
     # Create new surface plot
     surf = ax.plot_surface(Y, X, B, cmap='viridis')
@@ -87,12 +88,18 @@ for iter in tqdm(range(600), desc="Processing frames"):
     ax.set_title(f'Time = {
                  iter*delT:.2e} sec\nPlot of z-component of E-field under Patch Antenna and Microstrip')
 
-    # Convert plot to image and add to frames
+    # Convert plot to image and save
     buf = io.BytesIO()
     plt.savefig(buf, format='png', dpi=100)
     with open(f'buffer/{iter}.png', 'wb') as f:
         f.write(buf.getvalue())
     buf.close()
+    plt.close(fig)
 
-plt.close()
+
+# Main animation loop
+with mp.Pool(processes=16) as pool:
+    list(tqdm(pool.imap(process_frame, range(600)),
+         total=600, desc="Processing frames"))
+
 print("Done!")
