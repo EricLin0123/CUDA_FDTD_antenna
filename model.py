@@ -14,7 +14,7 @@ z_offset = 3 * dz
 L1 = 32 * dx
 L2 = 40 * dy
 L3 = 50 * dy  # microstrip line length
-L4 = 7 * dx
+L4 = 5 * dx
 L5 = 6 * dx  # microstrip width
 
 x_boundary = 60 * dx

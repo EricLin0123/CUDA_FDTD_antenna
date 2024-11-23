@@ -32,15 +32,85 @@ float Gaussian(float t)
 int main()
 {
     int i, j, k;
+    int t = 0;
+    int nsteps = 1;
+    int n = 0;
+    float pulse = 0.0f;
     // D = epsilon E
     // permeability of the dielectric medium is around 1, so skip it.
-    float dx[IE][JE][KE], dy[IE][JE][KE], dz[IE][JE][KE];
     float ex[IE][JE][KE], ey[IE][JE][KE], ez[IE][JE][KE];
     float hx[IE][JE][KE], hy[IE][JE][KE], hz[IE][JE][KE];
-    dx[i][j][k] = dx[i][j][k] + .5 * (hz[i][j][k] - hz[i][j - 1][k] - hy[i][j][k] + hy[i][j][k - 1]);
-    dy[i][j][k] = dz[i][j][k] + .5 * (hx[i][j][k] - hx[i][j][k - 1] - hz[i][j][k] + hz[i - 1][j][k]);
-    dz[i][j][k] = dz[i][j][k] + .5 * (hy[i][j][k] - hy[i - 1][j][k] - hx[i][j][k] + hx[i][j - 1][k]);
-    hx[i][j][k] = hx[i][j][k] + .5 * (ey[i][j][k + 1] - ey[i][j][k] - ez[i][j + 1][k] + ez[i][j][k]);
-    hy[i][j][k] = hy[i][j][k] + .5 * (ez[i + 1][j][k] - ez[i][j][k] - ex[i][j][k + 1] + ex[i][j][k]);
-    hz[i][j][k] = hz[i][j][k] + .5 * (ex[i][j + 1][k] - ex[i][j][k] - ey[i + 1][j][k] + ey[i][j][k]);
+
+    // Initialize the fields to zero
+    for (i = 0; i < IE; i++)
+    {
+        for (j = 0; j < JE; j++)
+        {
+            for (k = 0; k < KE; k++)
+            {
+                ex[i][j][k] = 0.0f;
+                ey[i][j][k] = 0.0f;
+                ez[i][j][k] = 0.0f;
+                hx[i][j][k] = 0.0f;
+                hy[i][j][k] = 0.0f;
+                hz[i][j][k] = 0.0f;
+            }
+        }
+    }
+
+    // source excitation under the microstrip line
+    for (int i = 21; i <= 27; i++)
+    {
+        for (int k = 0; k <= 3; k++)
+        {
+            ez[i][0][k] = Gaussian(t);
+        }
+    }
+    while (nsteps > 0)
+    {
+        printf("nsteps --> ");
+        scanf("%d", &nsteps);
+        printf("%d \n", nsteps);
+        for (n = 1; n <= nsteps; n++)
+        {
+            t += dt;
+            // Update electric fields
+            for (i = 1; i < IE; i++)
+            {
+                for (j = 1; j < JE; j++)
+                {
+                    for (k = 1; k < KE; k++)
+                    {
+                        ex[i][j][k] = ex[i][j][k] + .5 * (hz[i][j - 1][k] - hz[i][j][k] - hy[i][j][k] + hy[i][j][k - 1]);
+                        ey[i][j][k] = ey[i][j][k] + .5 * (hx[i][j][k] - hx[i][j][k - 1] - hz[i][j][k] + hz[i - 1][j][k]);
+                        ez[i][j][k] = ez[i][j][k] + .5 * (hy[i][j][k] - hy[i - 1][j][k] - hx[i][j][k] + hx[i][j - 1][k]);
+                    }
+                }
+            }
+
+            pulse = Gaussian(t);
+            // Source excitation
+            for (i = 21; i <= 27; i++)
+            {
+                for (k = 0; k <= 3; k++)
+                {
+                    ez[i][0][k] = pulse;
+                }
+            }
+
+            // Update magnetic fields
+            for (i = 0; i < IE - 1; i++)
+            {
+                for (j = 0; j < JE - 1; j++)
+                {
+                    for (k = 0; k < KE - 1; k++)
+                    {
+                        hx[i][j][k] = hx[i][j][k] + .5 * (ey[i][j][k + 1] - ey[i][j][k] - ez[i][j + 1][k] + ez[i][j][k]);
+                        hy[i][j][k] = hy[i][j][k] + .5 * (ez[i + 1][j][k] - ez[i][j][k] - ex[i][j][k + 1] + ex[i][j][k]);
+                        hz[i][j][k] = hz[i][j][k] + .5 * (ex[i][j + 1][k] - ex[i][j][k] - ey[i + 1][j][k] + ey[i][j][k]);
+                    }
+                }
+            }
+        }
+    }
 }
