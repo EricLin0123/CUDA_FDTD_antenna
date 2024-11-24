@@ -5,7 +5,7 @@ fdtd: fdtd.cpp
 	gcc -o fdtd fdtd.cpp -lm
 
 main: main.cu
-	nvcc -o main main.cu -lcuda -lcudart
+	nvcc -o fdtd main.cu -lcuda -lcudart
 
 PHONY: clean
 clean:

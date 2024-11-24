@@ -5,4 +5,4 @@ cd junk
 ../fdtd
 cd ..
 echo 'plotting...'
-python plot.py
+python plotCPU.py

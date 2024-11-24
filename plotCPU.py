@@ -47,7 +47,7 @@ ax.set_title(
     'Here is the patch and microstrip line.\nIn a second a pulse will be launched')
 
 # Capture initial frame multiple times
-for _ in range(25):
+for _ in range(25):  # 25 frames of the initial plot
     # Convert plot to image
     buf = io.BytesIO()
     plt.savefig(buf, format='png', dpi=100)
