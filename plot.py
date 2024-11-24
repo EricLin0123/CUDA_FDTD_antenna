@@ -1,7 +1,5 @@
 import numpy as np
 import matplotlib.pyplot as plt
-from matplotlib import animation
-import imageio
 import io
 from tqdm import tqdm
 import multiprocessing as mp
