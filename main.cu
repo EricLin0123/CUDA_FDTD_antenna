@@ -28,28 +28,53 @@
 #define EPSR 2.2
 
 /* globally declare fields */
-double Ex[LIMX][LIMY][LIMZ], Ey[LIMX][LIMY][LIMZ], Ez[LIMX][LIMY][LIMZ];
-double Hx[LIMX][LIMY][LIMZ], Hy[LIMX][LIMY][LIMZ], Hz[LIMX][LIMY][LIMZ];
+__device__ double Ex[LIMX][LIMY][LIMZ], Ey[LIMX][LIMY][LIMZ], Ez[LIMX][LIMY][LIMZ];
+__device__ double Hx[LIMX][LIMY][LIMZ], Hy[LIMX][LIMY][LIMZ], Hz[LIMX][LIMY][LIMZ];
 
 /* globally declare stored field arrays for ABCs */
-double HxABC1[LIMX][LIMZ], HzABC1[LIMX][LIMZ], HyABC2[LIMY][LIMZ], HzABC2[LIMY][LIMZ];
-double HyABC3[LIMY][LIMZ], HzABC3[LIMY][LIMZ], HxABC4[LIMX][LIMZ], HzABC4[LIMX][LIMZ];
-double HxABC5[LIMX][LIMY], HyABC5[LIMX][LIMY], ExABC6[LIMX][LIMZ], EzABC6[LIMX][LIMZ];
-double ExABC5[LIMX][LIMZ], EzABC5[LIMX][LIMZ];
+__device__ double HxABC1[LIMX][LIMZ], HzABC1[LIMX][LIMZ], HyABC2[LIMY][LIMZ], HzABC2[LIMY][LIMZ];
+__device__ double HyABC3[LIMY][LIMZ], HzABC3[LIMY][LIMZ], HxABC4[LIMX][LIMZ], HzABC4[LIMX][LIMZ];
+__device__ double HxABC5[LIMX][LIMY], HyABC5[LIMX][LIMY], ExABC6[LIMX][LIMZ], EzABC6[LIMX][LIMZ];
+__device__ double ExABC5[LIMX][LIMZ], EzABC5[LIMX][LIMZ];
 
 /* Storing the output to calculate S-parameters */
-double EzOut[totalT];
+__device__ double EzOut[totalT];
 
 /*  I want all variables declared globally */
-int i, j, k, ntime, frame = 0;
+__device__ int i, j, k, ntime, frame = 0;
 
 /*  Variables defining lattice and time steps, from Sheen, 1990 */
-double delX, delY, delZ, delT;
-double T, T0, temp;
+__device__ double delX, delY, delZ, delT;
+__device__ double T, T0, temp;
 
 /*  ABC Coefficients....and the FDTD coefficients */
-double abcFSx, abcFSy, abcFSz, abcDIx, abcDIy, abcDIz, abcBx, abcBy, abcBz, cF, cB, cD;
-double tMUX, tMUY, tMUZ, tEPX, tEPY, tEPZ, tERX, tERY, tERZ, tEBX, tEBY, tEBZ;
+__device__ double abcFSx, abcFSy, abcFSz, abcDIx, abcDIy, abcDIz, abcBx, abcBy, abcBz, cF, cB, cD;
+__device__ double tMUX, tMUY, tMUZ, tEPX, tEPY, tEPZ, tERX, tERY, tERZ, tEBX, tEBY, tEBZ;
+
+void AllocateMemory(void)
+{
+    cudaMalloc((void **)&Ex, LIMX * LIMY * LIMZ * sizeof(double));
+    cudaMalloc((void **)&Ey, LIMX * LIMY * LIMZ * sizeof(double));
+    cudaMalloc((void **)&Ez, LIMX * LIMY * LIMZ * sizeof(double));
+    cudaMalloc((void **)&Hx, LIMX * LIMY * LIMZ * sizeof(double));
+    cudaMalloc((void **)&Hy, LIMX * LIMY * LIMZ * sizeof(double));
+    cudaMalloc((void **)&Hz, LIMX * LIMY * LIMZ * sizeof(double));
+    cudaMalloc((void **)&HxABC1, LIMX * LIMZ * sizeof(double));
+    cudaMalloc((void **)&HzABC1, LIMX * LIMZ * sizeof(double));
+    cudaMalloc((void **)&HyABC2, LIMY * LIMZ * sizeof(double));
+    cudaMalloc((void **)&HzABC2, LIMY * LIMZ * sizeof(double));
+    cudaMalloc((void **)&HyABC3, LIMY * LIMZ * sizeof(double));
+    cudaMalloc((void **)&HzABC3, LIMY * LIMZ * sizeof(double));
+    cudaMalloc((void **)&HxABC4, LIMX * LIMZ * sizeof(double));
+    cudaMalloc((void **)&HzABC4, LIMX * LIMZ * sizeof(double));
+    cudaMalloc((void **)&HxABC5, LIMX * LIMY * sizeof(double));
+    cudaMalloc((void **)&HyABC5, LIMX * LIMY * sizeof(double));
+    cudaMalloc((void **)&ExABC6, LIMX * LIMZ * sizeof(double));
+    cudaMalloc((void **)&EzABC6, LIMX * LIMZ * sizeof(double));
+    cudaMalloc((void **)&ExABC5, LIMX * LIMZ * sizeof(double));
+    cudaMalloc((void **)&EzABC5, LIMX * LIMZ * sizeof(double));
+    cudaMalloc((void **)&EzOut, totalT * sizeof(double));
+}
 
 FILE *out;
 
@@ -62,15 +87,8 @@ void FirstABC();
 void UpdateHfields();
 void SecondABC();
 
-int main()
+__global__ void InitializeData(void)
 {
-
-    FILE *in;
-    char basename[80] = "junk", filename[100];
-    char outputF[20] = "Incident.txt";
-
-    out = fopen(outputF, "w");
-
     /* Define the Space */
     delX = 0.389e-3;
     delY = 0.400e-3;
@@ -120,6 +138,17 @@ int main()
     tEBX = delT / EPS0 * 2. / (EPSR + 1) / delX;
     tEBY = delT / EPS0 * 2. / (EPSR + 1) / delY;
     tEBZ = delT / EPS0 * 2. / (EPSR + 1) / delZ;
+}
+
+int main()
+{
+    FILE *in;
+    char basename[80] = "junk", filename[100];
+    char outputF[20] = "Incident.txt";
+    out = fopen(outputF, "w");
+    AllocateMemory();
+
+    InitializeData<<<1, 1>>>();
 
     /*  Zero Out the Fields */
     Initialize();
@@ -163,25 +192,32 @@ int main()
 /**********************************
  *  Zeros all fields and ABC storage arrays *
  *****************************************/
-void Initialize()
+__global__ void InitializeFields(void)
 {
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
 
-    /*Initializing fields to zero*/
-    for (i = 0; i < LIMX; i++)
-        for (j = 0; j < LIMY; j++)
-            for (k = 0; k < LIMZ; k++)
-            {
-                Ex[i][j][k] = 0.;
-                Ey[i][j][k] = 0.;
-                Ez[i][j][k] = 0.;
-                Hx[i][j][k] = 0.;
-                Hy[i][j][k] = 0.;
-                Hz[i][j][k] = 0.;
-            }
+    if (i < LIMX && j < LIMY && k < LIMZ)
+    {
+        Ex[i][j][k] = 0.;
+        Ey[i][j][k] = 0.;
+        Ez[i][j][k] = 0.;
+        Hx[i][j][k] = 0.;
+        Hy[i][j][k] = 0.;
+        Hz[i][j][k] = 0.;
+    }
+}
 
-    /* ABCs on wall Y = 0 and Y = LIMY */
-    for (i = 0; i < LIMX; i++)
-        for (k = 0; k < LIMZ; k++)
+__global__ void InitializeABCs(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
+
+    if (i < LIMX && k < LIMZ)
+    {
+        if (j == 0)
         {
             HxABC1[i][k] = 0.;
             HzABC1[i][k] = 0.;
@@ -192,24 +228,36 @@ void Initialize()
             ExABC5[i][k] = 0.;
             EzABC5[i][k] = 0.;
         }
+    }
 
-    /* ABCs on wall X = 0 and X = LIMX */
-    for (j = 0; j < LIMY; j++)
-        for (k = 0; k < LIMZ; k++)
+    if (j < LIMY && k < LIMZ)
+    {
+        if (i == 0)
         {
             HyABC2[j][k] = 0.;
             HzABC2[j][k] = 0.;
             HyABC3[j][k] = 0.;
             HzABC3[j][k] = 0.;
         }
+    }
 
-    /* ABC on Z = LIMZ **/
-    for (i = 0; i < LIMX; i++)
-        for (j = 0; j < LIMY; j++)
+    if (i < LIMX && j < LIMY)
+    {
+        if (k == 0)
         {
             HxABC5[i][j] = 0.;
             HyABC5[i][j] = 0.;
         }
+    }
+}
+
+void Initialize()
+{
+    dim3 threadsPerBlock(8, 8, 8);
+    dim3 numBlocks((LIMX + threadsPerBlock.x - 1) / threadsPerBlock.x, (LIMY + threadsPerBlock.y - 1) / threadsPerBlock.y, (LIMZ + threadsPerBlock.z - 1) / threadsPerBlock.z);
+
+    InitializeFields<<<numBlocks, threadsPerBlock>>>();
+    InitializeABCs<<<numBlocks, threadsPerBlock>>>();
 }
 /*  End Initialize Function **********/
 
@@ -218,107 +266,127 @@ void Initialize()
 /*  Updates Ex, Ey, and Ez.
  *
  ***********************************/
+__global__ void UpdateEx(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
+
+    if (i < LIMX && j < LIMY - 1 && k < LIMZ)
+    {
+        if (k > 3)
+        {
+            Ex[i][j][k] += tEPY * (Hz[i][j][k] - Hz[i][j - 1][k]) - tEPZ * (Hy[i][j][k] - Hy[i][j][k - 1]);
+        }
+        else if (k == 3)
+        {
+            Ex[i][j][k] += tEBY * (Hz[i][j][k] - Hz[i][j - 1][k]) - tEBZ * (Hy[i][j][k] - Hy[i][j][k - 1]);
+        }
+        else
+        {
+            Ex[i][j][k] += tERY * (Hz[i][j][k] - Hz[i][j - 1][k]) - tERZ * (Hy[i][j][k] - Hy[i][j][k - 1]);
+        }
+    }
+}
+
+__global__ void UpdateExSource(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int k = blockIdx.y * blockDim.y + threadIdx.y;
+    int j = 0;
+    if (i < LIMX && k < LIMZ)
+    {
+        if (k > 3)
+        {
+            Ex[i][j][k] += tEPY * 2. * Hz[i][j][k] - tEPZ * (Hy[i][j][k] - Hy[i][j][k - 1]);
+        }
+        else if (k == 3)
+        {
+            Ex[i][j][k] += tEBY * 2. * Hz[i][j][k] - tEBZ * (Hy[i][j][k] - Hy[i][j][k - 1]);
+        }
+        else
+        {
+            Ex[i][j][k] += tERY * 2. * Hz[i][j][k] - tERZ * (Hy[i][j][k] - Hy[i][j][k - 1]);
+        }
+    }
+}
+__global__ void UpdateEy(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
+
+    if (i < LIMX && j < LIMY - 1 && k < LIMZ)
+    {
+        if (k > 3)
+        {
+            Ey[i][j][k] += tEPZ * (Hx[i][j][k] - Hx[i][j][k - 1]) - tEPX * (Hz[i][j][k] - Hz[i - 1][j][k]);
+        }
+        else if (k == 3)
+        {
+            Ey[i][j][k] += tEBZ * (Hx[i][j][k] - Hx[i][j][k - 1]) - tEBX * (Hz[i][j][k] - Hz[i - 1][j][k]);
+        }
+        else
+        {
+            Ey[i][j][k] += tERZ * (Hx[i][j][k] - Hx[i][j][k - 1]) - tERX * (Hz[i][j][k] - Hz[i - 1][j][k]);
+        }
+    }
+}
+
+__global__ void UpdateEz(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
+
+    if (i < LIMX && j < LIMY - 1 && k < LIMZ)
+    {
+        if (k > 2)
+        {
+            Ez[i][j][k] += tEPX * (Hy[i][j][k] - Hy[i - 1][j][k]) - tEPY * (Hx[i][j][k] - Hx[i][j - 1][k]);
+        }
+        else if (k < 3)
+        {
+            Ez[i][j][k] += tERX * (Hy[i][j][k] - Hy[i - 1][j][k]) - tERY * (Hx[i][j][k] - Hx[i][j - 1][k]);
+        }
+    }
+}
+
+__global__ void UpdateEzSource(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int k = blockIdx.y * blockDim.y + threadIdx.y;
+    int j = 0;
+    if (i < LIMX && k < LIMZ)
+    {
+        if (k >= 3)
+        {
+            Ez[i][j][k] += tEPX * (Hy[i][j][k] - Hy[i - 1][j][k]) - tEPY * 2. * Hx[i][j][k];
+        }
+        else if (k < 3)
+        {
+            Ez[i][j][k] += tERX * (Hy[i][j][k] - Hy[i - 1][j][k]) - tERY * 2. * Hx[i][j][k];
+        }
+    }
+}
 void UpdateEfields()
 {
-
-    /*Update Ex Field */
-    for (i = 0; i < LIMX; i++)
-        for (j = 1; j < LIMY - 1; j++)
-            for (k = 1; k < LIMZ; k++)
-            {
-                if (k > 3)
-                {
-                    Ex[i][j][k] += tEPY * (Hz[i][j][k] - Hz[i][j - 1][k]) - tEPZ * (Hy[i][j][k] - Hy[i][j][k - 1]);
-                }
-                else if (k == 3)
-                {
-                    Ex[i][j][k] += tEBY * (Hz[i][j][k] - Hz[i][j - 1][k]) - tEBZ * (Hy[i][j][k] - Hy[i][j][k - 1]);
-                }
-                else
-                {
-                    Ex[i][j][k] += tERY * (Hz[i][j][k] - Hz[i][j - 1][k]) - tERZ * (Hy[i][j][k] - Hy[i][j][k - 1]);
-                }
-            }
-
-    /*Special update for Ex because of PMC on wall y=0 */
-    /*Simulated a PMC here.  See Sheen, 1990 for details.  */
-    /*  Don't need to do this for Ez, because it is where the source is added */
+    dim3 threadsPerBlock(8, 8, 8);
+    dim3 numBlocks((LIMX + threadsPerBlock.x - 1) / threadsPerBlock.x, (LIMY + threadsPerBlock.y - 1) / threadsPerBlock.y, (LIMZ + threadsPerBlock.z - 1) / threadsPerBlock.z);
+    dim3 threadPerBlock2D(8, 8);
+    dim3 numBlocks2D((LIMX + threadPerBlock2D.x - 1) / threadPerBlock2D.x, (LIMZ + threadPerBlock2D.y - 1) / threadPerBlock2D.y);
+    /* Update Electric Fields */
+    UpdateEx<<<numBlocks, threadsPerBlock>>>();
     if (ntime < SWITCH1)
-    {
-        j = 0;
-        for (i = 0; i < LIMX; i++)
-            for (k = 1; k < LIMZ; k++)
-            {
-                if (k > 3)
-                {
-                    Ex[i][j][k] += tEPY * 2. * Hz[i][j][k] - tEPZ * (Hy[i][j][k] - Hy[i][j][k - 1]);
-                }
-                else if (k == 3)
-                {
-                    Ex[i][j][k] += tEBY * 2. * Hz[i][j][k] - tEBZ * (Hy[i][j][k] - Hy[i][j][k - 1]);
-                }
-                else
-                {
-                    Ex[i][j][k] += tERY * 2. * Hz[i][j][k] - tERZ * (Hy[i][j][k] - Hy[i][j][k - 1]);
-                }
-            }
-    }
-
-    /*Updating the Ey fields */
-    for (i = 1; i < LIMX; i++)
-        for (j = 0; j < LIMY - 1; j++)
-            for (k = 1; k < LIMZ; k++)
-            {
-                if (k > 3)
-                {
-                    Ey[i][j][k] += tEPZ * (Hx[i][j][k] - Hx[i][j][k - 1]) - tEPX * (Hz[i][j][k] - Hz[i - 1][j][k]);
-                }
-                else if (k == 3)
-                {
-                    Ey[i][j][k] += tEBZ * (Hx[i][j][k] - Hx[i][j][k - 1]) - tEBX * (Hz[i][j][k] - Hz[i - 1][j][k]);
-                }
-                else
-                {
-                    Ey[i][j][k] += tERZ * (Hx[i][j][k] - Hx[i][j][k - 1]) - tERX * (Hz[i][j][k] - Hz[i - 1][j][k]);
-                }
-            }
-
-    /* Updating Ez fields */
-    for (i = 1; i < LIMX; i++)
-        for (j = 1; j < LIMY - 1; j++)
-            for (k = 0; k < LIMZ; k++)
-            {
-                if (k > 2)
-                {
-                    Ez[i][j][k] += tEPX * (Hy[i][j][k] - Hy[i - 1][j][k]) - tEPY * (Hx[i][j][k] - Hx[i][j - 1][k]);
-                }
-                else if (k < 3)
-                {
-                    Ez[i][j][k] += tERX * (Hy[i][j][k] - Hy[i - 1][j][k]) - tERY * (Hx[i][j][k] - Hx[i][j - 1][k]);
-                }
-            }
-
-    /* Special Update for Ez fields on y=0 */
+        UpdateExSource<<<numBlocks2D, threadPerBlock2D>>>();
+    UpdateEy<<<numBlocks, threadsPerBlock>>>();
+    UpdateEz<<<numBlocks, threadsPerBlock>>>();
     if (ntime < SWITCH1)
-    {
-        j = 0;
-        for (i = 1; i < LIMX; i++)
-            for (k = 0; k < LIMZ; k++)
-            {
-                if (k >= 3)
-                {
-                    Ez[i][j][k] += tEPX * (Hy[i][j][k] - Hy[i - 1][j][k]) - tEPY * 2. * Hx[i][j][k];
-                }
-                else if (k < 3)
-                {
-                    Ez[i][j][k] += tERX * (Hy[i][j][k] - Hy[i - 1][j][k]) - tERY * 2. * Hx[i][j][k];
-                }
-            }
-    }
+        UpdateEzSource<<<numBlocks2D, threadPerBlock2D>>>();
     /* Save Required E-field */
     /*now...22 is about the middle of the strip, 40 is arbitrary, 2 is just under the strip*/
     EzOut[ntime] = Ez[22][40][2] + Ez[22][40][1] + Ez[22][40][0];
-    // fprintf(out, "%lf\n", EzOut[ntime]);
+    fprintf(out, "%lf\n", EzOut[ntime]);
 }
 /* End UpdateEfields function ********************************/
 
@@ -327,75 +395,60 @@ void UpdateEfields()
 /*  Zeros the tangential (Ex, Ey) fields on the conductor
     surfaces (ground plane, microstrip, antenna)
 /**************************************/
+
+__global__ void GroundPlane(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    if (i < LIMX && j < LIMY)
+    {
+        Ex[i][j][0] = 0.;
+        Ey[i][j][0] = 0.;
+    }
+}
+
+__global__ void uStrip(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = 3;
+    if (i >= 19 && i <= 25 && j < 50)
+    {
+        if (i < 25)
+            Ex[i][j][k] = 0.;
+        Ey[i][j][k] = 0.;
+    }
+}
+
+__global__ void PatchAntenna(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = 3;
+    if (i >= 14 && i <= 46 && j >= 50)
+    {
+        if (i = 46) // edge of the patch antenna
+        {
+            Ey[i][j][k] = 0.;
+        }
+        else if (j = 89) // edge of the patch antenna
+        {
+            Ex[i][j][k] = 0.;
+        }
+        else
+        {
+            Ex[i][j][k] = 0.;
+            Ey[i][j][k] = 0.;
+        }
+    }
+}
 void Conductors()
 {
-
-    /*Ground plane at z=0********************/
-    k = 0;
-    for (i = 0; i < LIMX; i++)
-        for (j = 0; j < LIMY; j++)
-        {
-            Ex[i][j][k] = 0.;
-            Ey[i][j][k] = 0.;
-        }
-    /*************************************/
-
-    /* When you ONLY have the microstrip transmission line, you have this uncommented and
-       comment out the other uStrip and patch antenna sections *
-    k=3;
-    for(i=19; i<25; i++)
-      for(j=0; j<LIMY; j++){
-        Ex[i][j][k] = 0.;
-        Ey[i][j][k] = 0.;
-      }
-
-
-    k=3;
-    i=25;
-    for(j=0; j<LIMY; j++){
-      Ey[i][j][k] = 0.;
-    }
-    /* *******I add the above nodes to be zero to make the strip symmetric**********   */
-
-    /* uStrip - zeroing tangential fields  **************************************/
-    k = 3;
-    for (i = 19; i < 25; i++)
-        for (j = 0; j < 50; j++)
-        {
-            Ex[i][j][k] = 0.;
-            Ey[i][j][k] = 0.;
-        }
-
-    k = 3;
-    i = 25;
-    for (j = 0; j < 50; j++)
-    {
-        Ey[i][j][k] = 0.;
-    }
-    /**%%Above nodes zerod to make the strip symmetric, or fields look odd **/
-
-    /*Patch antenna ********************************/
-    k = 3;
-    for (i = 14; i < 46; i++)
-        for (j = 50; j < 89; j++)
-        {
-            Ex[i][j][k] = 0.;
-            Ey[i][j][k] = 0.;
-        }
-
-    i = 46;
-    for (j = 50; j < 89; j++)
-    {
-        Ey[i][j][k] = 0.;
-    }
-
-    // questionable here
-    j = 89;
-    for (i = 14; i <= 46; i++)
-    {
-        Ex[i][j][k] = 0.;
-    }
-    /*********************************************/
+    dim3 threadPerBlock2D(8, 8);
+    dim3 numBlocks2D((LIMX + threadPerBlock2D.x - 1) / threadPerBlock2D.x, (LIMY + threadPerBlock2D.y - 1) / threadPerBlock2D.y);
+    GroundPlane<<<numBlocks2D, threadPerBlock2D>>>();
+    uStrip<<<numBlocks2D, threadPerBlock2D>>>();
+    PatchAntenna<<<numBlocks2D, threadPerBlock2D>>>();
 }
 
 /* End function:  Conductors **************************/
@@ -426,8 +479,7 @@ void Source()
             }
     }
 
-    // fprintf(out, "%lf\n", exp( - (  (ntime*delT - T0 )/T ) * ( (ntime*delT-T0)/T ) ) );
-    fprintf(out, "%lf\n", (1 - exp(-ntime / 1000.)) * cos(2 * PI * 6.32e9 * delT * ntime));
+    fprintf(out, "%lf\n", exp(-((ntime * delT - T0) / T) * ((ntime * delT - T0) / T)));
 }
 
 /* End Function:   Source **********************************/
@@ -438,95 +490,149 @@ void Source()
 /* Implementation details are in Scheen, 1990.  Performed */
 /* after the source is turned off.  Also stores fields    */
 /* needed for next round.                                 */
+
+__global__ void ABCY0(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int k = blockIdx.y * blockDim.y + threadIdx.y;
+    int j = 0;
+
+    if (i < LIMX && k < LIMZ)
+    {
+        if (k > 3)
+        {
+            Ex[i][j][k] = ExABC6[i][k] + abcFSy * (Ex[i][j + 1][k] - Ex[i][j][k]);
+            Ez[i][j][k] = EzABC6[i][k] + abcFSy * (Ez[i][j + 1][k] - Ez[i][j][k]);
+        }
+        else if (k == 3)
+        {
+            Ex[i][j][k] = ExABC6[i][k] + abcBy * (Ex[i][j + 1][k] - Ex[i][j][k]);
+            Ez[i][j][k] = EzABC6[i][k] + abcFSy * (Ez[i][j + 1][k] - Ez[i][j][k]);
+        }
+        else
+        {
+            Ex[i][j][k] = ExABC6[i][k] + abcDIy * (Ex[i][j + 1][k] - Ex[i][j][k]);
+            Ez[i][j][k] = EzABC6[i][k] + abcDIy * (Ez[i][j + 1][k] - Ez[i][j][k]);
+        }
+    }
+}
+
+__global__ void StoreFieldsY0(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int k = blockIdx.y * blockDim.y + threadIdx.y;
+    int j = 0;
+
+    if (i < LIMX && k < LIMZ)
+    {
+        ExABC6[i][k] = Ex[i][j + 1][k];
+        EzABC6[i][k] = Ez[i][j + 1][k];
+    }
+}
+
+__global__ void ABCYLIMY(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int k = blockIdx.y * blockDim.y + threadIdx.y;
+    int j = LIMY - 1;
+
+    if (i < LIMX && k < LIMZ)
+    {
+        if (k > 3)
+        {
+            Ex[i][j][k] = ExABC5[i][k] + abcFSy * (Ex[i][j - 1][k] - Ex[i][j][k]);
+            Ez[i][j][k] = EzABC5[i][k] + abcFSy * (Ez[i][j - 1][k] - Ez[i][j][k]);
+        }
+        else if (k == 3)
+        {
+            Ex[i][j][k] = ExABC5[i][k] + abcBy * (Ex[i][j - 1][k] - Ex[i][j][k]);
+            Ez[i][j][k] = EzABC5[i][k] + abcFSy * (Ez[i][j - 1][k] - Ez[i][j][k]);
+        }
+        else
+        {
+            Ex[i][j][k] = ExABC5[i][k] + abcDIy * (Ex[i][j - 1][k] - Ex[i][j][k]);
+            Ez[i][j][k] = EzABC5[i][k] + abcDIy * (Ez[i][j - 1][k] - Ez[i][j][k]);
+        }
+    }
+}
+
+__global__ void StoreFieldsYLIMY(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int k = blockIdx.y * blockDim.y + threadIdx.y;
+    int j = LIMY - 1;
+
+    if (i < LIMX && k < LIMZ)
+    {
+        ExABC5[i][k] = Ex[i][j - 1][k];
+        EzABC5[i][k] = Ez[i][j - 1][k];
+    }
+}
+
 void FirstABC()
 {
+    dim3 threadPerBlock2D(8, 8);
+    dim3 numBlocks2D((LIMX + threadPerBlock2D.x - 1) / threadPerBlock2D.x, (LIMZ + threadPerBlock2D.y - 1) / threadPerBlock2D.y);
     /* ABC on the wall y=0 */
     if (ntime >= SWITCH1 + DELAY)
     {
-        j = 0;
-        for (i = 0; i < LIMX; i++)
-            for (k = 0; k < LIMZ; k++)
-            {
-                if (k > 3)
-                {
-                    Ex[i][j][k] = ExABC6[i][k] + abcFSy * (Ex[i][j + 1][k] - Ex[i][j][k]);
-                    Ez[i][j][k] = EzABC6[i][k] + abcFSy * (Ez[i][j + 1][k] - Ez[i][j][k]);
-                }
-                else if (k == 3)
-                {
-                    Ex[i][j][k] = ExABC6[i][k] + abcBy * (Ex[i][j + 1][k] - Ex[i][j][k]);
-                    Ez[i][j][k] = EzABC6[i][k] + abcFSy * (Ez[i][j + 1][k] - Ez[i][j][k]);
-                }
-                else
-                {
-                    Ex[i][j][k] = ExABC6[i][k] + abcDIy * (Ex[i][j + 1][k] - Ex[i][j][k]);
-                    Ez[i][j][k] = EzABC6[i][k] + abcDIy * (Ez[i][j + 1][k] - Ez[i][j][k]);
-                }
-            }
+        ABCY0<<<numBlocks2D, threadPerBlock2D>>>();
     }
 
-    /*Store Fields for this ABC*/
-    j = 0;
-    for (i = 0; i < LIMX; i++)
-        for (k = 0; k < LIMZ; k++)
-        {
-            ExABC6[i][k] = Ex[i][j + 1][k];
-            EzABC6[i][k] = Ez[i][j + 1][k];
-        }
+    StoreFieldsY0<<<numBlocks2D, threadPerBlock2D>>>();
 
-    /* ABC on Wall Y = LIMY */
-    j = LIMY - 1;
-    for (i = 0; i < LIMX; i++)
-        for (k = 0; k < LIMZ; k++)
-        {
-            if (k > 3)
-            {
-                Ex[i][j][k] = ExABC5[i][k] + abcFSy * (Ex[i][j - 1][k] - Ex[i][j][k]);
-                Ez[i][j][k] = EzABC5[i][k] + abcFSy * (Ez[i][j - 1][k] - Ez[i][j][k]);
-            }
-            else if (k == 3)
-            {
-                Ex[i][j][k] = ExABC5[i][k] + abcBy * (Ex[i][j - 1][k] - Ex[i][j][k]);
-                Ez[i][j][k] = EzABC5[i][k] + abcFSy * (Ez[i][j - 1][k] - Ez[i][j][k]);
-            }
-            else
-            {
-                Ex[i][j][k] = ExABC5[i][k] + abcDIy * (Ex[i][j - 1][k] - Ex[i][j][k]);
-                Ez[i][j][k] = EzABC5[i][k] + abcDIy * (Ez[i][j - 1][k] - Ez[i][j][k]);
-            }
-        }
+    ABCYLIMY<<<numBlocks2D, threadPerBlock2D>>>();
 
-    /* Save Fields for this ABC */
-    j = LIMY - 1;
-    for (i = 0; i < LIMX; i++)
-        for (k = 0; k < LIMZ; k++)
-        {
-            ExABC5[i][k] = Ex[i][j - 1][k];
-            EzABC5[i][k] = Ez[i][j - 1][k];
-        }
+    StoreFieldsYLIMY<<<numBlocks2D, threadPerBlock2D>>>();
 }
 /* End Function:   FirstABC *******************************/
 
 /* Function:  UpdateHfields() *****************************/
 /* Updates H-fields.   Nothing special here.  *************/
+__global__ void UpdateHx(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
+
+    if (i < LIMX && j < LIMY - 1 && k < LIMZ - 1)
+    {
+        Hx[i][j][k] += tMUZ * (Ey[i][j][k + 1] - Ey[i][j][k]) - tMUY * (Ez[i][j + 1][k] - Ez[i][j][k]);
+    }
+}
+
+__global__ void UpdateHy(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
+
+    if (i < LIMX - 1 && j < LIMY && k < LIMZ - 1)
+    {
+        Hy[i][j][k] += tMUX * (Ez[i + 1][j][k] - Ez[i][j][k]) - tMUZ * (Ex[i][j][k + 1] - Ex[i][j][k]);
+    }
+}
+
+__global__ void UpdateHz(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = blockIdx.z * blockDim.z + threadIdx.z;
+
+    if (i < LIMX - 1 && j < LIMY - 1 && k < LIMZ)
+    {
+        Hz[i][j][k] += tMUY * (Ex[i][j + 1][k] - Ex[i][j][k]) - tMUX * (Ey[i + 1][j][k] - Ey[i][j][k]);
+    }
+}
+
 void UpdateHfields()
 {
+    dim3 threadsPerBlock(8, 8, 8);
+    dim3 numBlocks((LIMX + threadsPerBlock.x - 1) / threadsPerBlock.x, (LIMY + threadsPerBlock.y - 1) / threadsPerBlock.y, (LIMZ + threadsPerBlock.z - 1) / threadsPerBlock.z);
 
-    /*Update Magnetic Fields */
-    for (i = 0; i < LIMX; i++)
-        for (j = 0; j < LIMY - 1; j++)
-            for (k = 0; k < LIMZ - 1; k++)
-                Hx[i][j][k] += tMUZ * (Ey[i][j][k + 1] - Ey[i][j][k]) - tMUY * (Ez[i][j + 1][k] - Ez[i][j][k]);
-
-    for (i = 0; i < LIMX - 1; i++)
-        for (j = 0; j < LIMY; j++)
-            for (k = 0; k < LIMZ - 1; k++)
-                Hy[i][j][k] += tMUX * (Ez[i + 1][j][k] - Ez[i][j][k]) - tMUZ * (Ex[i][j][k + 1] - Ex[i][j][k]);
-
-    for (i = 0; i < LIMX - 1; i++)
-        for (j = 0; j < LIMY - 1; j++)
-            for (k = 0; k < LIMZ; k++)
-                Hz[i][j][k] += tMUY * (Ex[i][j + 1][k] - Ex[i][j][k]) - tMUX * (Ey[i + 1][j][k] - Ey[i][j][k]);
+    UpdateHx<<<numBlocks, threadsPerBlock>>>();
+    UpdateHy<<<numBlocks, threadsPerBlock>>>();
+    UpdateHz<<<numBlocks, threadsPerBlock>>>();
 }
 /* End Function:   UpdateHfields() ***********************/
 
@@ -534,153 +640,172 @@ void UpdateHfields()
 /* Implements the remaining ABCs on the walls X = 0, LIMX */
 /* and Y = LIMY, Z = LIMZ.   Also, the required fields are*/
 /* then stored.                                           */
-void SecondABC()
+__global__ void SecondABC_1()
 {
-    /*Implementation of ABCs */
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    int k = blockIdx.y * blockDim.y + threadIdx.y;
+    int i = 0;
 
-    /* ABC 1 - on the wall y=LIMY *
-    j=LIMY-1;
-    for(i=0; i<LIMX; i++)
-        for(k=0; k<LIMZ; k++){
-            if(k>3){
-                Hx[i][j][k] = HxABC1[i][k] + abcFSy * (Hx[i][j-1][k] - Hx[i][j][k]);
-                Hz[i][j][k] = HzABC1[i][k] + abcFSy * (Hz[i][j-1][k] - Hz[i][j][k]);
-            }else if(k==3){
-                Hx[i][j][k] = HxABC1[i][k] + abcFSy * (Hx[i][j-1][k] - Hx[i][j][k]);
-                Hz[i][j][k] = HzABC1[i][k] + abcBy  * (Hz[i][j-1][k] - Hz[i][j][k]);
-            }else{
-                Hx[i][j][k] = HxABC1[i][k] + abcDIy * (Hx[i][j-1][k] - Hx[i][j][k]);
-                Hz[i][j][k] = HzABC1[i][k] + abcDIy * (Hz[i][j-1][k] - Hz[i][j][k]);
-            }
-        }
-
-    /* ABC 2 - on the wall x=0 */
-    i = 0;
-    for (j = 0; j < LIMY; j++)
-        for (k = 0; k < LIMZ; k++)
+    if (j < LIMY && k < LIMZ)
+    {
+        if (k > 3)
         {
-            if (k > 3)
-            {
-                Hy[i][j][k] = HyABC2[j][k] + abcFSx * (Hy[i + 1][j][k] - Hy[i][j][k]);
-                Hz[i][j][k] = HzABC2[j][k] + abcFSx * (Hz[i + 1][j][k] - Hz[i][j][k]);
-            }
-            else if (k == 3)
-            {
-                Hy[i][j][k] = HyABC2[j][k] + abcFSx * (Hy[i + 1][j][k] - Hy[i][j][k]);
-                Hz[i][j][k] = HzABC2[j][k] + abcBx * (Hz[i + 1][j][k] - Hz[i][j][k]);
-            }
-            else
-            {
-                Hy[i][j][k] = HyABC2[j][k] + abcDIx * (Hy[i + 1][j][k] - Hy[i][j][k]);
-                Hz[i][j][k] = HzABC2[j][k] + abcDIx * (Hz[i + 1][j][k] - Hz[i][j][k]);
-            }
+            Hy[i][j][k] = HyABC2[j][k] + abcFSx * (Hy[i + 1][j][k] - Hy[i][j][k]);
+            Hz[i][j][k] = HzABC2[j][k] + abcFSx * (Hz[i + 1][j][k] - Hz[i][j][k]);
         }
-
-    /* ABC 3 - on the wall x=LIMX */
-    i = LIMX - 1;
-    for (j = 0; j < LIMY; j++)
-        for (k = 0; k < LIMZ; k++)
+        else if (k == 3)
         {
-            if (k > 3)
-            {
-                Hy[i][j][k] = HyABC3[j][k] + abcFSx * (Hy[i - 1][j][k] - Hy[i][j][k]);
-                Hz[i][j][k] = HzABC3[j][k] + abcFSx * (Hz[i - 1][j][k] - Hz[i][j][k]);
-            }
-            else if (k == 3)
-            {
-                Hy[i][j][k] = HyABC3[j][k] + abcFSx * (Hy[i - 1][j][k] - Hy[i][j][k]);
-                Hz[i][j][k] = HzABC3[j][k] + abcBx * (Hz[i - 1][j][k] - Hz[i][j][k]);
-            }
-            else
-            {
-                Hy[i][j][k] = HyABC3[j][k] + abcDIx * (Hy[i - 1][j][k] - Hy[i][j][k]);
-                Hz[i][j][k] = HzABC3[j][k] + abcDIx * (Hz[i - 1][j][k] - Hz[i][j][k]);
-            }
+            Hy[i][j][k] = HyABC2[j][k] + abcFSx * (Hy[i + 1][j][k] - Hy[i][j][k]);
+            Hz[i][j][k] = HzABC2[j][k] + abcBx * (Hz[i + 1][j][k] - Hz[i][j][k]);
         }
-
-    /* ABC 4 - the switched on one: y=0
-    j=0;
-    if(ntime >= SWITCH1){
-        for(i=0; i<LIMX; i++)
-            for(k=0; k<LIMZ; k++){
-            if(k>3){
-                Hx[i][j][k] = HxABC4[i][k] + ABCcoef * (Hx[i][j+1][k] - Hx[i][j][k]);
-                Hz[i][j][k] = HzABC4[i][k] + ABCcoef * (Hz[i][j+1][k] - Hz[i][j][k]);
-            }else if(k==3){
-                Hx[i][j][k] = HxABC4[i][k] + ABCcoef  * (Hx[i][j+1][k] - Hx[i][j][k]);
-                Hz[i][j][k] = HzABC4[i][k] + ABCcoefB * (Hz[i][j+1][k] - Hz[i][j][k]);
-            }else{
-                Hx[i][j][k] = HxABC4[i][k] + ABCcoefD * (Hx[i][j+1][k] - Hx[i][j][k]);
-                Hz[i][j][k] = HzABC4[i][k] + ABCcoefD * (Hz[i][j+1][k] - Hz[i][j][k]);
-            }
+        else
+        {
+            Hy[i][j][k] = HyABC2[j][k] + abcDIx * (Hy[i + 1][j][k] - Hy[i][j][k]);
+            Hz[i][j][k] = HzABC2[j][k] + abcDIx * (Hz[i + 1][j][k] - Hz[i][j][k]);
         }
     }
+}
 
-    /* ABC 5 - The wall z=LIMZ */
-    k = LIMZ - 1;
-    for (i = 0; i < LIMX; i++)
-        for (j = 0; j < LIMY; j++)
-        {
-            if (k > 3)
-            {
-                Hx[i][j][k] = HxABC5[i][j] + abcFSz * (Hx[i][j][k - 1] - Hx[i][j][k]);
-                Hy[i][j][k] = HyABC5[i][j] + abcFSz * (Hy[i][j][k - 1] - Hy[i][j][k]);
-            }
-            else if (k == 3)
-            {
-                Hx[i][j][k] = HxABC5[i][j] + abcFSz * (Hx[i][j][k - 1] - Hx[i][j][k]);
-                Hy[i][j][k] = HyABC5[i][j] + abcFSz * (Hy[i][j][k - 1] - Hy[i][j][k]);
-            }
-            else
-            {
-                Hx[i][j][k] = HxABC5[i][j] + abcDIz * (Hx[i][j][k - 1] - Hx[i][j][k]);
-                Hy[i][j][k] = HyABC5[i][j] + abcDIz * (Hy[i][j][k - 1] - Hy[i][j][k]);
-            }
-        }
+__global__ void SecondABC_2()
+{
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    int k = blockIdx.y * blockDim.y + threadIdx.y;
+    int i = LIMX - 1;
 
-    /* Saving */
-    k = LIMZ - 1;
-    for (i = 0; i < LIMX; i++)
-        for (j = 0; j < LIMY; j++)
+    if (j < LIMY && k < LIMZ)
+    {
+        if (k > 3)
         {
-            HxABC5[i][j] = Hx[i][j][k - 1];
-            HyABC5[i][j] = Hy[i][j][k - 1];
+            Hy[i][j][k] = HyABC3[j][k] + abcFSx * (Hy[i - 1][j][k] - Hy[i][j][k]);
+            Hz[i][j][k] = HzABC3[j][k] + abcFSx * (Hz[i - 1][j][k] - Hz[i][j][k]);
         }
+        else if (k == 3)
+        {
+            Hy[i][j][k] = HyABC3[j][k] + abcFSx * (Hy[i - 1][j][k] - Hy[i][j][k]);
+            Hz[i][j][k] = HzABC3[j][k] + abcBx * (Hz[i - 1][j][k] - Hz[i][j][k]);
+        }
+        else
+        {
+            Hy[i][j][k] = HyABC3[j][k] + abcDIx * (Hy[i - 1][j][k] - Hy[i][j][k]);
+            Hz[i][j][k] = HzABC3[j][k] + abcDIx * (Hz[i - 1][j][k] - Hz[i][j][k]);
+        }
+    }
+}
 
-    /* Saving more fields */
-    j = 0;
-    for (i = 0; i < LIMX; i++)
-        for (k = 0; k < LIMZ; k++)
-        {
-            HxABC4[i][k] = Hx[i][j + 1][k];
-            HzABC4[i][k] = Hz[i][j + 1][k];
-        }
+__global__ void SecondABC_3()
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = LIMZ - 1;
 
-    /* Save fields */
-    i = 0;
-    for (j = 0; j < LIMY; j++)
-        for (k = 0; k < LIMZ; k++)
+    if (i < LIMX && j < LIMY)
+    {
+        if (k > 3)
         {
-            HyABC2[j][k] = Hy[i + 1][j][k];
-            HzABC2[j][k] = Hz[i + 1][j][k];
+            Hx[i][j][k] = HxABC5[i][j] + abcFSz * (Hx[i][j][k - 1] - Hx[i][j][k]);
+            Hy[i][j][k] = HyABC5[i][j] + abcFSz * (Hy[i][j][k - 1] - Hy[i][j][k]);
         }
+        else if (k == 3)
+        {
+            Hx[i][j][k] = HxABC5[i][j] + abcFSz * (Hx[i][j][k - 1] - Hx[i][j][k]);
+            Hy[i][j][k] = HyABC5[i][j] + abcFSz * (Hy[i][j][k - 1] - Hy[i][j][k]);
+        }
+        else
+        {
+            Hx[i][j][k] = HxABC5[i][j] + abcDIz * (Hx[i][j][k - 1] - Hx[i][j][k]);
+            Hy[i][j][k] = HyABC5[i][j] + abcDIz * (Hy[i][j][k - 1] - Hy[i][j][k]);
+        }
+    }
+}
 
-    /* Save fields */
-    i = LIMX - 1;
-    for (j = 0; j < LIMY; j++)
-        for (k = 0; k < LIMZ; k++)
-        {
-            HyABC3[j][k] = Hy[i - 1][j][k];
-            HzABC3[j][k] = Hz[i - 1][j][k];
-        }
+__global__ void SaveFields_1()
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int k = blockIdx.y * blockDim.y + threadIdx.y;
+    int j = 0;
 
-    /* Save required fields */
-    j = LIMY - 1;
-    for (i = 0; i < LIMX; i++)
-        for (k = 0; k < LIMZ; k++)
-        {
-            HxABC1[i][k] = Hx[i][j - 1][k];
-            HzABC1[i][k] = Hz[i][j - 1][k];
-        }
+    if (i < LIMX && k < LIMZ)
+    {
+        HxABC4[i][k] = Hx[i][j + 1][k];
+        HzABC4[i][k] = Hz[i][j + 1][k];
+    }
+}
+
+__global__ void SaveFields_2()
+{
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    int k = blockIdx.y * blockDim.y + threadIdx.y;
+    int i = 0;
+
+    if (j < LIMY && k < LIMZ)
+    {
+        HyABC2[j][k] = Hy[i + 1][j][k];
+        HzABC2[j][k] = Hz[i + 1][j][k];
+    }
+}
+
+__global__ void SaveFields_3()
+{
+    int j = blockIdx.x * blockDim.x + threadIdx.x;
+    int k = blockIdx.y * blockDim.y + threadIdx.y;
+    int i = LIMX - 1;
+
+    if (j < LIMY && k < LIMZ)
+    {
+        HyABC3[j][k] = Hy[i - 1][j][k];
+        HzABC3[j][k] = Hz[i - 1][j][k];
+    }
+}
+
+__global__ void SaveFields_4()
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int k = blockIdx.y * blockDim.y + threadIdx.y;
+    int j = LIMY - 1;
+
+    if (i < LIMX && k < LIMZ)
+    {
+        HxABC1[i][k] = Hx[i][j - 1][k];
+        HzABC1[i][k] = Hz[i][j - 1][k];
+    }
+}
+
+__global__ void SaveFields_5()
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x;
+    int j = blockIdx.y * blockDim.y + threadIdx.y;
+    int k = LIMZ - 1;
+
+    if (i < LIMX && j < LIMY)
+    {
+        HxABC5[i][j] = Hx[i][j][k - 1];
+        HyABC5[i][j] = Hy[i][j][k - 1];
+    }
+}
+
+void SecondABC()
+{
+    dim3 threadsPerBlock(16, 16);
+    dim3 numBlocks1((LIMY + threadsPerBlock.x - 1) / threadsPerBlock.x, (LIMZ + threadsPerBlock.y - 1) / threadsPerBlock.y);
+    dim3 numBlocks2((LIMX + threadsPerBlock.x - 1) / threadsPerBlock.x, (LIMY + threadsPerBlock.y - 1) / threadsPerBlock.y);
+    dim3 numBlocks3((LIMX + threadsPerBlock.x - 1) / threadsPerBlock.x, (LIMZ + threadsPerBlock.y - 1) / threadsPerBlock.y);
+
+    SecondABC_1<<<numBlocks1, threadsPerBlock>>>();
+    cudaDeviceSynchronize();
+    SecondABC_2<<<numBlocks1, threadsPerBlock>>>();
+    cudaDeviceSynchronize();
+    SecondABC_3<<<numBlocks2, threadsPerBlock>>>();
+    cudaDeviceSynchronize();
+
+    SaveFields_1<<<numBlocks3, threadsPerBlock>>>(); // j = 0
+    cudaDeviceSynchronize();
+    SaveFields_2<<<numBlocks1, threadsPerBlock>>>(); // i = 0
+    cudaDeviceSynchronize();
+    SaveFields_3<<<numBlocks1, threadsPerBlock>>>(); // i = LIMX - 1
+    cudaDeviceSynchronize();
+    SaveFields_4<<<numBlocks3, threadsPerBlock>>>(); // j = LIMY - 1
+    cudaDeviceSynchronize();
+    SaveFields_5<<<numBlocks2, threadsPerBlock>>>(); // k = LIMZ - 1
+    cudaDeviceSynchronize();
 }
 /* End Function:   SecondABC() *****************************/
