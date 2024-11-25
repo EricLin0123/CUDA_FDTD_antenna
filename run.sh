@@ -1,5 +1,7 @@
+make clean
+
 echo 'compiling...'
-make main
+make fdtd
 
 echo 'running...'
 cd junk
@@ -9,5 +11,5 @@ cd ..
 echo 'plotting...'
 python plotCPU.py
 
-echo 'convert to video'
-python convertVideo.py
+# echo 'convert to video'
+# python convertVideo.py

@@ -40,8 +40,8 @@ surf = ax.plot_surface(Y, X, B, cmap='viridis')
 ax.set_xlim([0, LIMY * delY])
 ax.set_ylim([0, LIMX * delX])
 ax.set_zlim([-1, 1])
-ax.set_xlabel('y-axis (m)')
-ax.set_ylabel('x-axis (m)')
+ax.set_xlabel('x-axis (m)')
+ax.set_ylabel('y-axis (m)')
 ax.set_zlabel('E_z (V/m)')
 ax.set_title(
     'Here is the patch and microstrip line.\nIn a second a pulse will be launched')
@@ -62,8 +62,8 @@ def process_frame(iter):
     ax.set_xlim([0, LIMY * delY])
     ax.set_ylim([0, LIMX * delX])
     ax.set_zlim([-1, 1])
-    ax.set_xlabel('y-axis (m)')
-    ax.set_ylabel('x-axis (m)')
+    ax.set_xlabel('x-axis (m)')
+    ax.set_ylabel('y-axis (m)')
     ax.set_zlabel('E_z (V/m)')
 
     # Read data file

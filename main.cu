@@ -29,6 +29,7 @@
 
 /* globally declare fields */
 __device__ double Ex[LIMX][LIMY][LIMZ], Ey[LIMX][LIMY][LIMZ], Ez[LIMX][LIMY][LIMZ];
+double h_Ez[LIMX][LIMY][LIMZ];
 __device__ double Hx[LIMX][LIMY][LIMZ], Hy[LIMX][LIMY][LIMZ], Hz[LIMX][LIMY][LIMZ];
 
 /* globally declare stored field arrays for ABCs */
@@ -39,6 +40,7 @@ __device__ double ExABC5[LIMX][LIMZ], EzABC5[LIMX][LIMZ];
 
 /* Storing the output to calculate S-parameters */
 __device__ double EzOut[totalT];
+double h_EzOut[totalT];
 
 /*  I want all variables declared globally */
 __device__ int i, j, k, ntime, frame = 0;
@@ -50,34 +52,8 @@ __device__ double T, T0, temp;
 /*  ABC Coefficients....and the FDTD coefficients */
 __device__ double abcFSx, abcFSy, abcFSz, abcDIx, abcDIy, abcDIz, abcBx, abcBy, abcBz, cF, cB, cD;
 __device__ double tMUX, tMUY, tMUZ, tEPX, tEPY, tEPZ, tERX, tERY, tERZ, tEBX, tEBY, tEBZ;
-
-void AllocateMemory(void)
-{
-    cudaMalloc((void **)&Ex, LIMX * LIMY * LIMZ * sizeof(double));
-    cudaMalloc((void **)&Ey, LIMX * LIMY * LIMZ * sizeof(double));
-    cudaMalloc((void **)&Ez, LIMX * LIMY * LIMZ * sizeof(double));
-    cudaMalloc((void **)&Hx, LIMX * LIMY * LIMZ * sizeof(double));
-    cudaMalloc((void **)&Hy, LIMX * LIMY * LIMZ * sizeof(double));
-    cudaMalloc((void **)&Hz, LIMX * LIMY * LIMZ * sizeof(double));
-    cudaMalloc((void **)&HxABC1, LIMX * LIMZ * sizeof(double));
-    cudaMalloc((void **)&HzABC1, LIMX * LIMZ * sizeof(double));
-    cudaMalloc((void **)&HyABC2, LIMY * LIMZ * sizeof(double));
-    cudaMalloc((void **)&HzABC2, LIMY * LIMZ * sizeof(double));
-    cudaMalloc((void **)&HyABC3, LIMY * LIMZ * sizeof(double));
-    cudaMalloc((void **)&HzABC3, LIMY * LIMZ * sizeof(double));
-    cudaMalloc((void **)&HxABC4, LIMX * LIMZ * sizeof(double));
-    cudaMalloc((void **)&HzABC4, LIMX * LIMZ * sizeof(double));
-    cudaMalloc((void **)&HxABC5, LIMX * LIMY * sizeof(double));
-    cudaMalloc((void **)&HyABC5, LIMX * LIMY * sizeof(double));
-    cudaMalloc((void **)&ExABC6, LIMX * LIMZ * sizeof(double));
-    cudaMalloc((void **)&EzABC6, LIMX * LIMZ * sizeof(double));
-    cudaMalloc((void **)&ExABC5, LIMX * LIMZ * sizeof(double));
-    cudaMalloc((void **)&EzABC5, LIMX * LIMZ * sizeof(double));
-    cudaMalloc((void **)&EzOut, totalT * sizeof(double));
-}
-
+int hi, hj, hk, h_ntime;
 FILE *out;
-
 /* declaration of functions */
 void Initialize();
 void UpdateEfields();
@@ -138,30 +114,28 @@ __global__ void InitializeData(void)
     tEBX = delT / EPS0 * 2. / (EPSR + 1) / delX;
     tEBY = delT / EPS0 * 2. / (EPSR + 1) / delY;
     tEBZ = delT / EPS0 * 2. / (EPSR + 1) / delZ;
+    printf("Pete Rules %lf %lf %lf\n", tEBX, tEBY, tEBZ);
 }
 
+__global__ void ntimeplus1()
+{
+    ntime++;
+}
 int main()
 {
-    FILE *in;
+    FILE *dump;
     char basename[80] = "junk", filename[100];
     char outputF[20] = "Incident.txt";
     out = fopen(outputF, "w");
-    AllocateMemory();
 
     InitializeData<<<1, 1>>>();
-
-    /*  Zero Out the Fields */
     Initialize();
 
-    printf("Pete Rules %lf %lf %lf\n", tEBX, tEBY, tEBZ);
-    // printf("Enter the number of time steps\n");
-    // scanf("%d", &totalT);
-
     /*Do time stepping */
-    for (ntime = 0; ntime < totalT; ntime++)
+    for (h_ntime = 0; h_ntime < totalT; h_ntime++)
     {
 
-        printf("Doing time step %d\r", ntime);
+        printf("Doing time step %d\r", h_ntime);
 
         UpdateEfields();
         FirstABC();
@@ -171,17 +145,26 @@ int main()
         SecondABC();
 
         /* Write out E-field */
-        k = 2;
-        if (ntime % 5 == 0)
+        hk = 2;
+        if (h_ntime % 5 == 0)
         {
+            cudaError_t err = cudaMemcpyFromSymbol(h_Ez, Ez, LIMX * LIMY * LIMZ * sizeof(double), 0, cudaMemcpyDeviceToHost);
+            if (err != cudaSuccess)
+            {
+                fprintf(stderr, "Failed to copy vector Ez from device to host (error code %s)!\n", cudaGetErrorString(err));
+                exit(EXIT_FAILURE);
+            }
             sprintf(filename, "%s.%d", basename, frame++);
-            in = fopen(filename, "w");
-            for (i = 0; i < LIMX; i++)
-                for (j = 0; j < LIMY; j++)
-                    fprintf(in, "%lf\n", Ez[i][j][k]);
+            dump = fopen(filename, "w");
+            for (hi = 0; hi < LIMX; hi++)
+                for (hj = 0; hj < LIMY; hj++)
+                {
+                    fprintf(dump, "%lf\n", h_Ez[hi][hj][hk]);
+                }
 
-            fclose(in);
+            fclose(dump);
         }
+        ntimeplus1<<<1, 1>>>();
 
     } /*End of time stepping*/
 
@@ -253,11 +236,13 @@ __global__ void InitializeABCs(void)
 
 void Initialize()
 {
-    dim3 threadsPerBlock(8, 8, 8);
-    dim3 numBlocks((LIMX + threadsPerBlock.x - 1) / threadsPerBlock.x, (LIMY + threadsPerBlock.y - 1) / threadsPerBlock.y, (LIMZ + threadsPerBlock.z - 1) / threadsPerBlock.z);
+    // 2 x 100 x 4 = 800 <= 1024
+    dim3 threadsPerBlock3D(2, LIMY, 4);
+    // 30 x 1 x 4
+    dim3 numBlocks3D((LIMX + threadsPerBlock3D.x - 1) / threadsPerBlock3D.x, (LIMY + threadsPerBlock3D.y - 1) / threadsPerBlock3D.y, (LIMZ + threadsPerBlock3D.z - 1) / threadsPerBlock3D.z);
 
-    InitializeFields<<<numBlocks, threadsPerBlock>>>();
-    InitializeABCs<<<numBlocks, threadsPerBlock>>>();
+    InitializeFields<<<numBlocks3D, threadsPerBlock3D>>>();
+    InitializeABCs<<<numBlocks3D, threadsPerBlock3D>>>();
 }
 /*  End Initialize Function **********/
 
@@ -272,7 +257,7 @@ __global__ void UpdateEx(void)
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     int k = blockIdx.z * blockDim.z + threadIdx.z;
 
-    if (i < LIMX && j < LIMY - 1 && k < LIMZ)
+    if (i < LIMX && 1 <= j && j < LIMY - 1 && 1 <= k && k < LIMZ)
     {
         if (k > 3)
         {
@@ -294,7 +279,7 @@ __global__ void UpdateExSource(void)
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int k = blockIdx.y * blockDim.y + threadIdx.y;
     int j = 0;
-    if (i < LIMX && k < LIMZ)
+    if (i < LIMX && 1 <= k && k < LIMZ)
     {
         if (k > 3)
         {
@@ -316,7 +301,7 @@ __global__ void UpdateEy(void)
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     int k = blockIdx.z * blockDim.z + threadIdx.z;
 
-    if (i < LIMX && j < LIMY - 1 && k < LIMZ)
+    if (1 <= i && i < LIMX && j < LIMY - 1 && 1 <= k && k < LIMZ)
     {
         if (k > 3)
         {
@@ -339,7 +324,7 @@ __global__ void UpdateEz(void)
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     int k = blockIdx.z * blockDim.z + threadIdx.z;
 
-    if (i < LIMX && j < LIMY - 1 && k < LIMZ)
+    if (1 <= i && i < LIMX && 1 <= j && j < LIMY - 1 && k < LIMZ)
     {
         if (k > 2)
         {
@@ -355,9 +340,9 @@ __global__ void UpdateEz(void)
 __global__ void UpdateEzSource(void)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
-    int k = blockIdx.y * blockDim.y + threadIdx.y;
     int j = 0;
-    if (i < LIMX && k < LIMZ)
+    int k = blockIdx.y * blockDim.y + threadIdx.y;
+    if (1 <= i && i < LIMX && k < LIMZ)
     {
         if (k >= 3)
         {
@@ -371,20 +356,28 @@ __global__ void UpdateEzSource(void)
 }
 void UpdateEfields()
 {
-    dim3 threadsPerBlock(8, 8, 8);
-    dim3 numBlocks((LIMX + threadsPerBlock.x - 1) / threadsPerBlock.x, (LIMY + threadsPerBlock.y - 1) / threadsPerBlock.y, (LIMZ + threadsPerBlock.z - 1) / threadsPerBlock.z);
-    dim3 threadPerBlock2D(8, 8);
+    // 2 x 100 x 4 = 800 <= 1024
+    dim3 threadsPerBlock3D(2, LIMY, 4);
+    // 30 x 1 x 4
+    dim3 numBlocks3D((LIMX + threadsPerBlock3D.x - 1) / threadsPerBlock3D.x, (LIMY + threadsPerBlock3D.y - 1) / threadsPerBlock3D.y, (LIMZ + threadsPerBlock3D.z - 1) / threadsPerBlock3D.z);
+    // 60 x 16 = 960 <= 1024
+    dim3 threadPerBlock2D(LIMX, LIMZ);
+    // 1 x 1
     dim3 numBlocks2D((LIMX + threadPerBlock2D.x - 1) / threadPerBlock2D.x, (LIMZ + threadPerBlock2D.y - 1) / threadPerBlock2D.y);
     /* Update Electric Fields */
-    UpdateEx<<<numBlocks, threadsPerBlock>>>();
+    UpdateEx<<<numBlocks3D, threadsPerBlock3D>>>();
     if (ntime < SWITCH1)
+    {
         UpdateExSource<<<numBlocks2D, threadPerBlock2D>>>();
-    UpdateEy<<<numBlocks, threadsPerBlock>>>();
-    UpdateEz<<<numBlocks, threadsPerBlock>>>();
+    }
+    UpdateEy<<<numBlocks3D, threadsPerBlock3D>>>();
+    UpdateEz<<<numBlocks3D, threadsPerBlock3D>>>();
     if (ntime < SWITCH1)
+    {
         UpdateEzSource<<<numBlocks2D, threadPerBlock2D>>>();
+    }
     /* Save Required E-field */
-    /*now...22 is about the middle of the strip, 40 is arbitrary, 2 is just under the strip*/
+    /* 22 is about the middle of the strip, 40 is arbitrary, 2 is just under the strip*/
     EzOut[ntime] = Ez[22][40][2] + Ez[22][40][1] + Ez[22][40][0];
     fprintf(out, "%lf\n", EzOut[ntime]);
 }
@@ -412,7 +405,7 @@ __global__ void uStrip(void)
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     int k = 3;
-    if (i >= 19 && i <= 25 && j < 50)
+    if (19 <= i && i <= 25 && j < 50)
     {
         if (i < 25)
             Ex[i][j][k] = 0.;
@@ -425,26 +418,25 @@ __global__ void PatchAntenna(void)
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     int k = 3;
-    if (i >= 14 && i <= 46 && j >= 50)
+    if (14 <= i && i < 46 && 50 <= j && j < 89)
     {
-        if (i = 46) // edge of the patch antenna
-        {
-            Ey[i][j][k] = 0.;
-        }
-        else if (j = 89) // edge of the patch antenna
-        {
-            Ex[i][j][k] = 0.;
-        }
-        else
-        {
-            Ex[i][j][k] = 0.;
-            Ey[i][j][k] = 0.;
-        }
+        Ex[i][j][k] = 0.;
+        Ey[i][j][k] = 0.;
+    }
+    if (i == 46 && 50 <= j && j < 89)
+    {
+        Ey[i][j][k] = 0.;
+    }
+    if (j == 89 && 14 <= i && i <= 46)
+    {
+        Ex[i][j][k] = 0.;
     }
 }
 void Conductors()
 {
-    dim3 threadPerBlock2D(8, 8);
+    // 10 x 100 = 1000 <= 1024
+    dim3 threadPerBlock2D(10, LIMY);
+    // 6 x 1
     dim3 numBlocks2D((LIMX + threadPerBlock2D.x - 1) / threadPerBlock2D.x, (LIMY + threadPerBlock2D.y - 1) / threadPerBlock2D.y);
     GroundPlane<<<numBlocks2D, threadPerBlock2D>>>();
     uStrip<<<numBlocks2D, threadPerBlock2D>>>();
@@ -456,30 +448,40 @@ void Conductors()
 /* Function:  Source ********************************/
 /*
 /*  Adds in the source *******************************/
+__global__ void GaussianSource(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x; // from 0 to 6 offset by 19
+    int k = blockIdx.y * blockDim.y + threadIdx.y; // from 0 to 2 no offset
+    int j = 0;
+
+    temp = (ntime * delT - T0) / T;
+    Ez[i + 19][j][k] = exp(-temp * temp);
+}
+
+__global__ void NoSource(void)
+{
+    int i = blockIdx.x * blockDim.x + threadIdx.x; // from 0 to 5 offset by 19
+    int k = blockIdx.y * blockDim.y + threadIdx.y; // from 0 to 2 no offset
+    int j = 0;
+
+    Ex[i + 19][j][k] = 0.;
+}
+
 void Source()
 {
-
-    /* Source */
+    dim3 threadPerBlock(7, 3);
+    dim3 threadPerBlock2(6, 3);
     if (ntime < SWITCH1)
     {
-        j = 0;
-        for (i = 19; i <= 25; i++)
-            for (k = 0; k < 3; k++)
-            {
-                temp = (ntime * delT - T0) / T;
-                Ez[i][j][k] = exp(-temp * temp);
-            }
+        GaussianSource<<<1, threadPerBlock>>>(); // 7x3
     }
     else
     {
-        for (i = 19; i < 25; i++)
-            for (k = 0; k < 3; k++)
-            {
-                Ex[i][j][k] = 0.;
-            }
+        NoSource<<<1, threadPerBlock2>>>(); // 6x3
     }
 
-    fprintf(out, "%lf\n", exp(-((ntime * delT - T0) / T) * ((ntime * delT - T0) / T)));
+    // TODO
+    // fprintf(out, "%lf\n", exp(-((ntime * delT - T0) / T) * ((ntime * delT - T0) / T)));
 }
 
 /* End Function:   Source **********************************/
@@ -791,21 +793,13 @@ void SecondABC()
     dim3 numBlocks3((LIMX + threadsPerBlock.x - 1) / threadsPerBlock.x, (LIMZ + threadsPerBlock.y - 1) / threadsPerBlock.y);
 
     SecondABC_1<<<numBlocks1, threadsPerBlock>>>();
-    cudaDeviceSynchronize();
     SecondABC_2<<<numBlocks1, threadsPerBlock>>>();
-    cudaDeviceSynchronize();
     SecondABC_3<<<numBlocks2, threadsPerBlock>>>();
-    cudaDeviceSynchronize();
 
     SaveFields_1<<<numBlocks3, threadsPerBlock>>>(); // j = 0
-    cudaDeviceSynchronize();
     SaveFields_2<<<numBlocks1, threadsPerBlock>>>(); // i = 0
-    cudaDeviceSynchronize();
     SaveFields_3<<<numBlocks1, threadsPerBlock>>>(); // i = LIMX - 1
-    cudaDeviceSynchronize();
     SaveFields_4<<<numBlocks3, threadsPerBlock>>>(); // j = LIMY - 1
-    cudaDeviceSynchronize();
     SaveFields_5<<<numBlocks2, threadsPerBlock>>>(); // k = LIMZ - 1
-    cudaDeviceSynchronize();
 }
 /* End Function:   SecondABC() *****************************/

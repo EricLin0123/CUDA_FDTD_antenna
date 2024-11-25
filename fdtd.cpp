@@ -149,7 +149,9 @@ int main()
             in = fopen(filename, "w");
             for (i = 0; i < LIMX; i++)
                 for (j = 0; j < LIMY; j++)
+                {
                     fprintf(in, "%lf\n", Ez[i][j][k]);
+                }
 
             fclose(in);
         }
@@ -342,7 +344,7 @@ void Conductors()
 
     /* When you ONLY have the microstrip transmission line, you have this uncommented and
        comment out the other uStrip and patch antenna sections *
-    k=3;
+    k=3;0
     for(i=19; i<25; i++)
       for(j=0; j<LIMY; j++){
         Ex[i][j][k] = 0.;
