@@ -366,20 +366,21 @@ void UpdateEfields()
     dim3 numBlocks2D((LIMX + threadPerBlock2D.x - 1) / threadPerBlock2D.x, (LIMZ + threadPerBlock2D.y - 1) / threadPerBlock2D.y);
     /* Update Electric Fields */
     UpdateEx<<<numBlocks3D, threadsPerBlock3D>>>();
-    if (ntime < SWITCH1)
+    if (h_ntime < SWITCH1)
     {
         UpdateExSource<<<numBlocks2D, threadPerBlock2D>>>();
     }
     UpdateEy<<<numBlocks3D, threadsPerBlock3D>>>();
     UpdateEz<<<numBlocks3D, threadsPerBlock3D>>>();
-    if (ntime < SWITCH1)
+    if (h_ntime < SWITCH1)
     {
         UpdateEzSource<<<numBlocks2D, threadPerBlock2D>>>();
     }
     /* Save Required E-field */
     /* 22 is about the middle of the strip, 40 is arbitrary, 2 is just under the strip*/
-    EzOut[ntime] = Ez[22][40][2] + Ez[22][40][1] + Ez[22][40][0];
-    fprintf(out, "%lf\n", EzOut[ntime]);
+    // TODO
+    // EzOut[h_ntime] = Ez[22][40][2] + Ez[22][40][1] + Ez[22][40][0];
+    // fprintf(out, "%lf\n", EzOut[h_ntime]);
 }
 /* End UpdateEfields function ********************************/
 
@@ -471,7 +472,7 @@ void Source()
 {
     dim3 threadPerBlock(7, 3);
     dim3 threadPerBlock2(6, 3);
-    if (ntime < SWITCH1)
+    if (h_ntime < SWITCH1)
     {
         GaussianSource<<<1, threadPerBlock>>>(); // 7x3
     }
@@ -573,18 +574,18 @@ __global__ void StoreFieldsYLIMY(void)
 
 void FirstABC()
 {
-    dim3 threadPerBlock2D(8, 8);
+    // 60 x 16 = 960 <= 1024
+    dim3 threadPerBlock2D(LIMX, LIMZ);
+    // 1 x 1
     dim3 numBlocks2D((LIMX + threadPerBlock2D.x - 1) / threadPerBlock2D.x, (LIMZ + threadPerBlock2D.y - 1) / threadPerBlock2D.y);
     /* ABC on the wall y=0 */
-    if (ntime >= SWITCH1 + DELAY)
+    if (h_ntime >= SWITCH1 + DELAY)
     {
         ABCY0<<<numBlocks2D, threadPerBlock2D>>>();
     }
 
     StoreFieldsY0<<<numBlocks2D, threadPerBlock2D>>>();
-
     ABCYLIMY<<<numBlocks2D, threadPerBlock2D>>>();
-
     StoreFieldsYLIMY<<<numBlocks2D, threadPerBlock2D>>>();
 }
 /* End Function:   FirstABC *******************************/
@@ -629,12 +630,14 @@ __global__ void UpdateHz(void)
 
 void UpdateHfields()
 {
-    dim3 threadsPerBlock(8, 8, 8);
-    dim3 numBlocks((LIMX + threadsPerBlock.x - 1) / threadsPerBlock.x, (LIMY + threadsPerBlock.y - 1) / threadsPerBlock.y, (LIMZ + threadsPerBlock.z - 1) / threadsPerBlock.z);
+    // 2 x 100 x 4 = 800 <= 1024
+    dim3 threadsPerBlock3D(2, LIMY, 4);
+    // 30 x 1 x 4
+    dim3 numBlocks3D((LIMX + threadsPerBlock3D.x - 1) / threadsPerBlock3D.x, (LIMY + threadsPerBlock3D.y - 1) / threadsPerBlock3D.y, (LIMZ + threadsPerBlock3D.z - 1) / threadsPerBlock3D.z);
 
-    UpdateHx<<<numBlocks, threadsPerBlock>>>();
-    UpdateHy<<<numBlocks, threadsPerBlock>>>();
-    UpdateHz<<<numBlocks, threadsPerBlock>>>();
+    UpdateHx<<<numBlocks3D, threadsPerBlock3D>>>();
+    UpdateHy<<<numBlocks3D, threadsPerBlock3D>>>();
+    UpdateHz<<<numBlocks3D, threadsPerBlock3D>>>();
 }
 /* End Function:   UpdateHfields() ***********************/
 
@@ -787,7 +790,7 @@ __global__ void SaveFields_5()
 
 void SecondABC()
 {
-    dim3 threadsPerBlock(16, 16);
+    dim3 threadsPerBlock(4, 4);
     dim3 numBlocks1((LIMY + threadsPerBlock.x - 1) / threadsPerBlock.x, (LIMZ + threadsPerBlock.y - 1) / threadsPerBlock.y);
     dim3 numBlocks2((LIMX + threadsPerBlock.x - 1) / threadsPerBlock.x, (LIMY + threadsPerBlock.y - 1) / threadsPerBlock.y);
     dim3 numBlocks3((LIMX + threadsPerBlock.x - 1) / threadsPerBlock.x, (LIMZ + threadsPerBlock.y - 1) / threadsPerBlock.y);
@@ -796,10 +799,10 @@ void SecondABC()
     SecondABC_2<<<numBlocks1, threadsPerBlock>>>();
     SecondABC_3<<<numBlocks2, threadsPerBlock>>>();
 
-    SaveFields_1<<<numBlocks3, threadsPerBlock>>>(); // j = 0
-    SaveFields_2<<<numBlocks1, threadsPerBlock>>>(); // i = 0
-    SaveFields_3<<<numBlocks1, threadsPerBlock>>>(); // i = LIMX - 1
-    SaveFields_4<<<numBlocks3, threadsPerBlock>>>(); // j = LIMY - 1
-    SaveFields_5<<<numBlocks2, threadsPerBlock>>>(); // k = LIMZ - 1
+    SaveFields_1<<<numBlocks3, threadsPerBlock>>>(); // y = 0
+    SaveFields_2<<<numBlocks1, threadsPerBlock>>>(); // x = 0
+    SaveFields_3<<<numBlocks1, threadsPerBlock>>>(); // x = LIMX - 1
+    SaveFields_4<<<numBlocks3, threadsPerBlock>>>(); // y = LIMY - 1
+    SaveFields_5<<<numBlocks2, threadsPerBlock>>>(); // z = LIMZ - 1 (top)
 }
 /* End Function:   SecondABC() *****************************/
