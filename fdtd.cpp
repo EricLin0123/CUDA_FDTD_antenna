@@ -344,18 +344,19 @@ void Conductors()
 
     /* When you ONLY have the microstrip transmission line, you have this uncommented and
        comment out the other uStrip and patch antenna sections *
-    k=3;0
-    for(i=19; i<25; i++)
-      for(j=0; j<LIMY; j++){
-        Ex[i][j][k] = 0.;
+    k = 3;
+    for (i = 19; i < 25; i++)
+        for (j = 0; j < LIMY; j++)
+        {
+            Ex[i][j][k] = 0.;
+            Ey[i][j][k] = 0.;
+        }
+
+    k = 3;
+    i = 25;
+    for (j = 0; j < LIMY; j++)
+    {
         Ey[i][j][k] = 0.;
-      }
-
-
-    k=3;
-    i=25;
-    for(j=0; j<LIMY; j++){
-      Ey[i][j][k] = 0.;
     }
     /* *******I add the above nodes to be zero to make the strip symmetric**********   */
 

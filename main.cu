@@ -27,6 +27,8 @@
 #define EPS0 8.854e-12
 #define EPSR 2.2
 
+#define STRIP
+
 /* globally declare fields */
 __device__ double Ex[LIMX][LIMY][LIMZ], Ey[LIMX][LIMY][LIMZ], Ez[LIMX][LIMY][LIMZ];
 double h_Ez[LIMX][LIMY][LIMZ];
@@ -52,7 +54,7 @@ __device__ double T, T0, temp;
 /*  ABC Coefficients....and the FDTD coefficients */
 __device__ double abcFSx, abcFSy, abcFSz, abcDIx, abcDIy, abcDIz, abcBx, abcBy, abcBz, cF, cB, cD;
 __device__ double tMUX, tMUY, tMUZ, tEPX, tEPY, tEPZ, tERX, tERY, tERZ, tEBX, tEBY, tEBZ;
-int hi, hj, hk, h_ntime;
+int hi, hj, hk, h_ntime, h_frame = 0;
 FILE *out;
 /* declaration of functions */
 void Initialize();
@@ -154,7 +156,7 @@ int main()
                 fprintf(stderr, "Failed to copy vector Ez from device to host (error code %s)!\n", cudaGetErrorString(err));
                 exit(EXIT_FAILURE);
             }
-            sprintf(filename, "%s.%d", basename, frame++);
+            sprintf(filename, "%s.%d", basename, h_frame++);
             dump = fopen(filename, "w");
             for (hi = 0; hi < LIMX; hi++)
                 for (hj = 0; hj < LIMY; hj++)
@@ -406,12 +408,21 @@ __global__ void uStrip(void)
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
     int k = 3;
+#ifdef STRIP
+    if (19 <= i && i <= 25 && j < LIMY)
+    {
+        if (i < 25)
+            Ex[i][j][k] = 0.;
+        Ey[i][j][k] = 0.; // i = 25
+    }
+#else
     if (19 <= i && i <= 25 && j < 50)
     {
         if (i < 25)
             Ex[i][j][k] = 0.;
-        Ey[i][j][k] = 0.;
+        Ey[i][j][k] = 0.; // i = 25
     }
+#endif
 }
 
 __global__ void PatchAntenna(void)
@@ -441,7 +452,9 @@ void Conductors()
     dim3 numBlocks2D((LIMX + threadPerBlock2D.x - 1) / threadPerBlock2D.x, (LIMY + threadPerBlock2D.y - 1) / threadPerBlock2D.y);
     GroundPlane<<<numBlocks2D, threadPerBlock2D>>>();
     uStrip<<<numBlocks2D, threadPerBlock2D>>>();
+#ifndef STRIP
     PatchAntenna<<<numBlocks2D, threadPerBlock2D>>>();
+#endif
 }
 
 /* End function:  Conductors **************************/

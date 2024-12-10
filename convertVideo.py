@@ -1,7 +1,7 @@
 import imageio
 
 # Define parameters
-fps = 24  # Frames per second
+fps = 59  # Frames per second
 output_filename = 'output_video.mp4'
 
 # Generate the list of file names
