@@ -67,6 +67,13 @@ python plotEz.py
 ## Results
 
 <div align="center">
+    <img src="media/output_antenna.gif" alt="Time Waveform" width=50%/>
+</div>
+This is the electric field under the patch antenna. The electric field is excited by a Gaussian pulse at the feed line.
+
+> Note that the simulation is sample every 5 time steps. So 1600 frames correspond to 8000 time steps.
+
+<div align="center">
     <img src="media/paper.png" alt="Return Loss" width=40%/>
     <img src="media/return-loss.png" alt="Return Loss" width=40%/>
 </div>
