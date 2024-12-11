@@ -4,6 +4,8 @@ import io
 from tqdm import tqdm
 import multiprocessing as mp
 
+frames = 1600
+
 # Constants
 LIMX = 60
 LIMY = 100
@@ -97,7 +99,7 @@ def process_frame(iter):
 
 # Main animation loop
 with mp.Pool(processes=16) as pool:
-    list(tqdm(pool.imap(process_frame, range(600)),
-         total=600, desc="Processing frames"))
+    list(tqdm(pool.imap(process_frame, range(1600)),
+         total=1600, desc="Processing frames"))
 
 print("Done!")

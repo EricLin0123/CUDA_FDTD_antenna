@@ -20,7 +20,7 @@
 #define DELAY 0
 
 /* Total number of time steps */
-#define totalT 3000
+#define totalT 8000
 
 #define PI 3.14159265358979
 #define MU0 1.25663706e-6
@@ -41,8 +41,8 @@ __device__ double HxABC5[LIMX][LIMY], HyABC5[LIMX][LIMY], ExABC6[LIMX][LIMZ], Ez
 __device__ double ExABC5[LIMX][LIMZ], EzABC5[LIMX][LIMZ];
 
 /* Storing the output to calculate S-parameters */
-__device__ double EzOut[totalT];
-double h_EzOut[totalT];
+double *d_EzOut;
+double *h_EzOut;
 
 /*  I want all variables declared globally */
 __device__ int i, j, k, ntime, frame = 0;
@@ -50,12 +50,14 @@ __device__ int i, j, k, ntime, frame = 0;
 /*  Variables defining lattice and time steps, from Sheen, 1990 */
 __device__ double delX, delY, delZ, delT;
 __device__ double T, T0, temp;
+double h_T, h_T0, h_delT;
 
 /*  ABC Coefficients....and the FDTD coefficients */
 __device__ double abcFSx, abcFSy, abcFSz, abcDIx, abcDIy, abcDIz, abcBx, abcBy, abcBz, cF, cB, cD;
 __device__ double tMUX, tMUY, tMUZ, tEPX, tEPY, tEPZ, tERX, tERY, tERZ, tEBX, tEBY, tEBZ;
 int hi, hj, hk, h_ntime, h_frame = 0;
 FILE *out;
+FILE *outGauss;
 /* declaration of functions */
 void Initialize();
 void UpdateEfields();
@@ -75,6 +77,7 @@ __global__ void InitializeData(void)
 
     /*  The source parameters */
     T = 15.e-12;
+
     T0 = 3. * T;
 
     /* Define Free Space ABC coefficients */
@@ -125,13 +128,30 @@ __global__ void ntimeplus1()
 }
 int main()
 {
+    h_delT = 0.441e-12;
+    h_T = 15.e-12;
+    h_T0 = 3. * h_T;
     FILE *dump;
+    cudaError_t err;
     char basename[80] = "junk", filename[100];
+#ifdef STRIP
+    char outputF[20] = "Incident_strip.txt";
+#else
     char outputF[20] = "Incident.txt";
-    out = fopen(outputF, "w");
+#endif
+    char outputGauss[20] = "Gauss.txt";
+    outGauss = fopen(outputGauss, "w+");
+    out = fopen(outputF, "w+");
 
     InitializeData<<<1, 1>>>();
     Initialize();
+    err = cudaMalloc((void **)&d_EzOut, totalT * sizeof(double));
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to allocate device vector d_EzOut (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+    h_EzOut = (double *)malloc(totalT * sizeof(double));
 
     /*Do time stepping */
     for (h_ntime = 0; h_ntime < totalT; h_ntime++)
@@ -150,7 +170,7 @@ int main()
         hk = 2;
         if (h_ntime % 5 == 0)
         {
-            cudaError_t err = cudaMemcpyFromSymbol(h_Ez, Ez, LIMX * LIMY * LIMZ * sizeof(double), 0, cudaMemcpyDeviceToHost);
+            err = cudaMemcpyFromSymbol(h_Ez, Ez, LIMX * LIMY * LIMZ * sizeof(double), 0, cudaMemcpyDeviceToHost);
             if (err != cudaSuccess)
             {
                 fprintf(stderr, "Failed to copy vector Ez from device to host (error code %s)!\n", cudaGetErrorString(err));
@@ -169,8 +189,19 @@ int main()
         ntimeplus1<<<1, 1>>>();
 
     } /*End of time stepping*/
+    err = cudaMemcpy(h_EzOut, d_EzOut, totalT * sizeof(double), cudaMemcpyDeviceToHost);
+    if (err != cudaSuccess)
+    {
+        fprintf(stderr, "Failed to copy vector d_EzOut from device to host (error code %s)!\n", cudaGetErrorString(err));
+        exit(EXIT_FAILURE);
+    }
+    for (h_ntime = 0; h_ntime < totalT; h_ntime++)
+    {
+        fprintf(out, "%lf\n", h_EzOut[h_ntime]);
+    }
 
     fclose(out);
+    fclose(outGauss);
 }
 
 /*  Function:  Initialize Fields   */
@@ -320,7 +351,7 @@ __global__ void UpdateEy(void)
     }
 }
 
-__global__ void UpdateEz(void)
+__global__ void UpdateEz(double *d_EzOut)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = blockIdx.y * blockDim.y + threadIdx.y;
@@ -337,9 +368,11 @@ __global__ void UpdateEz(void)
             Ez[i][j][k] += tERX * (Hy[i][j][k] - Hy[i - 1][j][k]) - tERY * (Hx[i][j][k] - Hx[i][j - 1][k]);
         }
     }
+    __syncthreads();
+    d_EzOut[ntime] = Ez[22][40][2] + Ez[22][40][1] + Ez[22][40][0];
 }
 
-__global__ void UpdateEzSource(void)
+__global__ void UpdateEzSource(double *d_EzOut)
 {
     int i = blockIdx.x * blockDim.x + threadIdx.x;
     int j = 0;
@@ -355,6 +388,8 @@ __global__ void UpdateEzSource(void)
             Ez[i][j][k] += tERX * (Hy[i][j][k] - Hy[i - 1][j][k]) - tERY * 2. * Hx[i][j][k];
         }
     }
+    __syncthreads();
+    d_EzOut[ntime] = Ez[22][40][2] + Ez[22][40][1] + Ez[22][40][0];
 }
 void UpdateEfields()
 {
@@ -373,16 +408,11 @@ void UpdateEfields()
         UpdateExSource<<<numBlocks2D, threadPerBlock2D>>>();
     }
     UpdateEy<<<numBlocks3D, threadsPerBlock3D>>>();
-    UpdateEz<<<numBlocks3D, threadsPerBlock3D>>>();
+    UpdateEz<<<numBlocks3D, threadsPerBlock3D>>>(d_EzOut);
     if (h_ntime < SWITCH1)
     {
-        UpdateEzSource<<<numBlocks2D, threadPerBlock2D>>>();
+        UpdateEzSource<<<numBlocks2D, threadPerBlock2D>>>(d_EzOut);
     }
-    /* Save Required E-field */
-    /* 22 is about the middle of the strip, 40 is arbitrary, 2 is just under the strip*/
-    // TODO
-    // EzOut[h_ntime] = Ez[22][40][2] + Ez[22][40][1] + Ez[22][40][0];
-    // fprintf(out, "%lf\n", EzOut[h_ntime]);
 }
 /* End UpdateEfields function ********************************/
 
@@ -495,7 +525,7 @@ void Source()
     }
 
     // TODO
-    // fprintf(out, "%lf\n", exp(-((ntime * delT - T0) / T) * ((ntime * delT - T0) / T)));
+    fprintf(outGauss, "%lf\n", exp(-((h_ntime * h_delT - h_T0) / h_T) * ((h_ntime * h_delT - h_T0) / h_T)));
 }
 
 /* End Function:   Source **********************************/
