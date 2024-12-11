@@ -8,8 +8,8 @@ cd junk
 ../fdtd
 cd ..
 
-echo 'plotting...'
+echo 'plotting PNG ...'
 python plotCPU.py
 
-echo 'convert to video'
-python convertVideo.py
+echo 'Using GPU H.264 hardware to convert to video'
+/usr/bin/ffmpeg -hwaccel cuda -framerate 60 -pattern_type glob -i 'buffer/*.png' -c:v h264_nvenc -preset fast output.mp4

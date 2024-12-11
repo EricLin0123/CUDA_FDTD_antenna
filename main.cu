@@ -1,11 +1,12 @@
 /* www.antenna-theory.com */
-/*Pete Bevelacqua - EE 517 */
+/* Pete Bevelacqua - EE 517 */
 
-/*This program is a 3D FDTD simulation that will
-  model the fields coming off of a microstrip, onto a patch antenna
-  ABC's are 1st order
-
+/* This program is a 3D FDTD simulation that will
+    model the fields coming off of a microstrip, onto a patch antenna.
+    ABC's are 1st order.
 */
+
+// #define STRIP
 
 #include <stdio.h>
 #include <math.h>
@@ -26,8 +27,6 @@
 #define MU0 1.25663706e-6
 #define EPS0 8.854e-12
 #define EPSR 2.2
-
-#define STRIP
 
 /* globally declare fields */
 __device__ double Ex[LIMX][LIMY][LIMZ], Ey[LIMX][LIMY][LIMZ], Ez[LIMX][LIMY][LIMZ];

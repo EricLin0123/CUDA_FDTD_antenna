@@ -33,8 +33,8 @@ plt.legend()
 
 # Perform Fourier transform on data_diff
 fft_data_diff = np.fft.fft(data_diff)
-# fft_gauss = np.fft.fft(Guass)
-fft_gauss = np.fft.fft(data1)
+fft_gauss = np.fft.fft(Guass)
+# fft_gauss = np.fft.fft(data1)
 s = fft_data_diff / fft_gauss
 
 # Calculate the frequency axis
@@ -51,6 +51,8 @@ s = 20 * np.log10(s)
 
 # Plot the frequency domain data
 plt.figure()
+plt.plot(fft_freq, fft_data_diff, color='blue', label='Antenna')
+plt.plot(fft_freq, fft_gauss, color='green', label='Strip')
 plt.plot(fft_freq, s, color='red', label='Return Loss')
 plt.title('Frequency Spectrum of Net Reflected Data')
 plt.xlim([0, 2e10])
