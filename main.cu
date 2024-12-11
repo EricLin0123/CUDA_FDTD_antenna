@@ -6,6 +6,12 @@
     ABC's are 1st order.
 */
 
+/*
+ * Source code by Pete Bevelacqua
+ * CUDA porting: 林萬荃 (Eric Lin)
+ * Date: 2024-12-12
+ */
+
 // #define STRIP
 
 #include <stdio.h>

@@ -1,3 +1,4 @@
+# Author: 林萬荃 (Eric Lin)
 import numpy as np
 import matplotlib.pyplot as plt
 import io
