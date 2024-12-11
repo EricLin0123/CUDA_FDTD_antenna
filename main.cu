@@ -153,9 +153,16 @@ int main()
     h_EzOut = (double *)malloc(totalT * sizeof(double));
 
     /*Do time stepping */
+    cudaEvent_t start, stop;
+    float milliseconds = 0;
+
+    cudaEventCreate(&start);
+    cudaEventCreate(&stop);
+
+    cudaEventRecord(start);
+
     for (h_ntime = 0; h_ntime < totalT; h_ntime++)
     {
-
         printf("Doing time step %d\r", h_ntime);
 
         UpdateEfields();
@@ -186,8 +193,16 @@ int main()
             fclose(dump);
         }
         ntimeplus1<<<1, 1>>>();
-
     } /*End of time stepping*/
+
+    cudaEventRecord(stop);
+    cudaEventSynchronize(stop);
+
+    cudaEventElapsedTime(&milliseconds, start, stop);
+    printf("Time for the loop: %f ms\n", milliseconds);
+
+    cudaEventDestroy(start);
+    cudaEventDestroy(stop);
     err = cudaMemcpy(h_EzOut, d_EzOut, totalT * sizeof(double), cudaMemcpyDeviceToHost);
     if (err != cudaSuccess)
     {
@@ -523,7 +538,6 @@ void Source()
         NoSource<<<1, threadPerBlock2>>>(); // 6x3
     }
 
-    // TODO
     fprintf(outGauss, "%lf\n", exp(-((h_ntime * h_delT - h_T0) / h_T) * ((h_ntime * h_delT - h_T0) / h_T)));
 }
 

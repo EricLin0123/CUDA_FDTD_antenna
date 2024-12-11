@@ -1,14 +1,14 @@
 /* www.antenna-theory.com */
-/*Pete Bevelacqua - EE 517 */
+/* Pete Bevelacqua - EE 517 */
 
-/*This program is a 3D FDTD simulation that will
-  model the fields coming off of a microstrip, onto a patch antenna
-  ABC's are 1st order
-
+/* This program is a 3D FDTD simulation that will
+    model the fields coming off of a microstrip, onto a patch antenna.
+    ABC's are 1st order.
 */
 
 #include <stdio.h>
 #include <math.h>
+#include <chrono>
 
 /* dimensions in the X, Y, and Z directions */
 #define LIMX 60
@@ -20,7 +20,7 @@
 #define DELAY 0
 
 /* Total number of time steps */
-#define totalT 3000
+#define totalT 8000
 
 #define PI 3.14159265358979
 #define MU0 1.25663706e-6
@@ -129,9 +129,11 @@ int main()
     // scanf("%d", &totalT);
 
     /*Do time stepping */
+
+    auto start = std::chrono::high_resolution_clock::now();
+
     for (ntime = 0; ntime < totalT; ntime++)
     {
-
         printf("Doing time step %d\r", ntime);
 
         UpdateEfields();
@@ -155,8 +157,11 @@ int main()
 
             fclose(in);
         }
-
     } /*End of time stepping*/
+
+    auto end = std::chrono::high_resolution_clock::now();
+    std::chrono::duration<double> elapsed = end - start;
+    printf("Elapsed time: %f seconds\n", elapsed.count());
 
     fclose(out);
 }
