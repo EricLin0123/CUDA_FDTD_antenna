@@ -55,10 +55,13 @@ plt.plot(fft_freq, fft_data_diff, color='blue', label='Antenna')
 plt.plot(fft_freq, fft_gauss, color='green', label='Strip')
 plt.plot(fft_freq, s, color='red', label='Return Loss')
 plt.title('Frequency Spectrum of Net Reflected Data')
-plt.xlim([0, 2e10])
 plt.ylim([-20, 5])
-plt.xlabel('Frequency (Hz)')
 plt.ylabel('Magnitude')
+# Set x-axis ticks at 1 GHz intervals with fixed decimal points
+plt.xlim([0, 2e10])  # 0 to 20 GHz
+plt.xticks(np.arange(0, 2e10 + 1, 1e9),
+           [f'{int(x/1e9)}' for x in np.arange(0, 2e10 + 1, 1e9)])
+plt.xlabel('Frequency (GHz)')
 plt.grid(True)
 plt.legend()
 
