@@ -2,6 +2,8 @@
 import matplotlib.pyplot as plt
 import numpy as np
 
+width = 4
+
 # Read the data from the file
 with open('junk/incident.txt', 'r') as file:
     data0 = file.readlines()
@@ -22,15 +24,16 @@ data_diff = [d0 - d1 for d0, d1 in zip(data0, data1)]
 
 # Plot the time domain data
 plt.figure()
-plt.plot(data0, label='antenna', linestyle=':', color='blue')
-plt.plot(data1, linestyle='--', label='Strip only', color='green')
-plt.plot(data_diff, label='Net reflected', color='red')
-plt.plot(Guass, label='Gauss', color='black')
+plt.plot(data0, label='antenna', linestyle=':', color='blue', linewidth=width)
+plt.plot(data1, linestyle='--', label='Strip only',
+         color='green', linewidth=width)
+plt.plot(data_diff, label='Net reflected', color='red', linewidth=width)
+plt.plot(Guass, label='Gauss', color='black', linewidth=width)
 plt.title('Incident Data Plot')
 plt.xlabel('Index')
 plt.ylabel('Value')
 plt.grid(True)
-plt.legend()
+plt.legend(fontsize=24)
 
 # Perform Fourier transform on data_diff
 fft_data_diff = np.fft.fft(data_diff)
@@ -52,9 +55,10 @@ s = 20 * np.log10(s)
 
 # Plot the frequency domain data
 plt.figure()
-plt.plot(fft_freq, fft_data_diff, color='blue', label='Antenna')
-plt.plot(fft_freq, fft_gauss, color='green', label='Strip')
-plt.plot(fft_freq, s, color='red', label='Return Loss')
+plt.plot(fft_freq, fft_data_diff, color='blue',
+         label='Antenna', linewidth=width)
+plt.plot(fft_freq, fft_gauss, color='green', label='Strip', linewidth=width)
+plt.plot(fft_freq, s, color='red', label='Return Loss', linewidth=width)
 plt.title('Frequency Spectrum of Net Reflected Data')
 plt.ylim([-20, 5])
 plt.ylabel('Magnitude')

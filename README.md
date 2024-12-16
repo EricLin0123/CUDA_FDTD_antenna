@@ -62,6 +62,12 @@ To see the resultant return-loss of the antenna, run the following command:
 python plotEz.py
 ```
 
+Model.py just recreate the model of the patch antenna.
+
+```bash
+python model.py
+```
+
 > Note that the above command require you to install ffmpeg with the `h264_nvenc` codec. Check Nvidia website for more information.
 
 ## Results
