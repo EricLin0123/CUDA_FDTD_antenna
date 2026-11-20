@@ -16,6 +16,21 @@ This project is a CUDA-accelerated FDTD simulation of a patch antenna. The simul
 Verified locally with an RTX 4060, CUDA 12.9, GCC 13.3, and Python 3.12.
 No Python CUDA package is required.
 
+## Learn the method in Jupyter
+
+[Open the FDTD teaching notebook](notebooks/FDTD_explained.ipynb) for Maxwell's
+curl equations, 3D Yee-cell diagrams, leapfrog updates, the Courant limit, and a
+small NumPy simulation with 3D field surfaces and an embedded animation. It also
+connects the equations to the CUDA functions in this project. No GPU is needed.
+
+```bash
+python3 -m pip install -r requirements-notebook.txt
+python3 -m jupyterlab notebooks/FDTD_explained.ipynb
+```
+
+Use your Python virtual environment and choose its kernel. Saved outputs are
+included for reading without execution. Run all cells from the top to experiment.
+
 ## Run the simulation
 
 Optional isolated Python environment:

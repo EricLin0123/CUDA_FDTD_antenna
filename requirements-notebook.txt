@@ -1,0 +1,5 @@
+-r requirements.txt
+jupyterlab>=4
+ipykernel>=6
+# Recent inline backends require newer Matplotlib than Ubuntu's 3.6 package.
+matplotlib>=3.9
