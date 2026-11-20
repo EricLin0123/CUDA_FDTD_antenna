@@ -9,3 +9,8 @@ buffer0/
 buffer/
 
 .vscode/
+
+build/
+runs/
+.venv/
+__pycache__/

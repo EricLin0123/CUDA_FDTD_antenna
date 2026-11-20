@@ -1,119 +1,71 @@
-# Author: 林萬荃 (Eric Lin)
-import numpy as np
+"""Stream a field animation to FFmpeg without temporary PNG files."""
+import argparse
+import shutil
+import subprocess
+from pathlib import Path
+import matplotlib
+matplotlib.use('Agg')
 import matplotlib.pyplot as plt
-import io
+from matplotlib.animation import FFMpegWriter
+import numpy as np
 from tqdm import tqdm
-import multiprocessing as mp
+from results import load_run, load_fields
 
 
-elev = 25
-azim = -140
-dist = 20
-
-frame = 1600
-
-# Constants
-LIMX = 60
-LIMY = 100
-
-delX = 0.389e-3
-delY = 0.4e-3
-delT = 0.441e-12
-
-max_range = max(LIMX * delX, LIMY * delY)
-
-x = np.arange(1, LIMX + 1) * delX
-y = np.arange(1, LIMY + 1) * delY
-
-# Create figure for 3D plotting
-fig = plt.figure(figsize=(10, 7.5))
-ax = fig.add_subplot(111, projection='3d')
-
-# Initialize video frames list
-frames = []
-
-# Initialize the patch position
-B = np.zeros((LIMX, LIMY))
-heightP = 0.2
-
-# Microstrip
-B[19:26, 0:50] = heightP  # Note: Python uses 0-based indexing
-
-# Patch antenna
-B[14:47, 50:90] = heightP
-
-# Initial plot
-X, Y = np.meshgrid(y, x)
-surf = ax.plot_surface(X, Y, B, cmap='viridis')
-ax.set_xlim([0, max_range])
-ax.set_ylim([0, max_range])
-ax.set_zlim([-1, 1])
-ax.set_xlabel('x-axis (m)')
-ax.set_ylabel('y-axis (m)')
-ax.set_zlabel('E_z (V/m)')
-ax.set_title(
-    'Here is the patch and microstrip line.\nIn a second a pulse will be launched')
-
-# Set camera position
-ax.view_init(elev=elev, azim=azim)
-ax.dist = dist
-
-# Capture initial frame multiple times
-for _ in range(25):  # 25 frames of the initial plot
-    # Convert plot to image
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', dpi=100)
-    with open('buffer/initial_frame.png', 'wb') as f:
-        f.write(buf.getvalue())
-    buf.close()
-
-
-def process_frame(iter):
+def main():
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument('run', type=Path)
+    parser.add_argument('--output', type=Path)
+    parser.add_argument('--fps', type=int, default=60)
+    parser.add_argument('--stride', type=int, default=1, help='Render every Nth saved frame')
+    parser.add_argument('--max-frames', type=int, help='Limit frames for a quick preview')
+    parser.add_argument('--codec', choices=['libx264', 'h264_nvenc'], default='libx264')
+    args = parser.parse_args()
+    if args.fps < 1 or args.stride < 1 or (args.max_frames is not None and args.max_frames < 1):
+        parser.error('fps, stride, and max-frames must be positive')
+    path, meta = load_run(args.run)
+    fields = load_fields(path, meta)
+    output = args.output or path / 'fields.mp4'
+    if output.exists():
+        parser.error(f'Output already exists: {output}')
+    x = (np.arange(fields.shape[1]) + 1) * meta['dx']
+    y = (np.arange(fields.shape[2]) + 1) * meta['dy']
+    xx, yy = np.meshgrid(x, y, indexing='ij')
     fig = plt.figure(figsize=(10, 7.5))
     ax = fig.add_subplot(111, projection='3d')
-    ax.set_xlim([0, max_range])
-    ax.set_ylim([0, max_range])
-    ax.set_zlim([-1, 1])
-    ax.set_xlabel('x-axis (m)')
-    ax.set_ylabel('y-axis (m)')
-    ax.set_zlabel('E_z (V/m)')
-
-    # Set camera position
-    ax.view_init(elev=elev, azim=azim)
-    ax.dist = dist
-
-    # Read data file
-    filename = f'junk/junk.{iter}'
+    ax.set(xlabel='x (m)', ylabel='y (m)', zlabel='Ez (V/m)', zlim=(-1, 1))
+    ax.view_init(elev=25, azim=-140)
+    indices = list(range(0, len(fields), args.stride))
+    if args.max_frames:
+        indices = indices[:args.max_frames]
+    candidates = dict.fromkeys(filter(None, [shutil.which('ffmpeg'), '/usr/bin/ffmpeg']))
+    for candidate in candidates:
+        if not Path(candidate).is_file():
+            continue
+        encoders = subprocess.run([candidate, '-hide_banner', '-encoders'],
+                                  capture_output=True, text=True, check=True).stdout
+        if any(len(line.split()) > 1 and line.split()[1] == args.codec
+               for line in encoders.splitlines()):
+            matplotlib.rcParams['animation.ffmpeg_path'] = candidate
+            break
+    else:
+        parser.error(f'No FFmpeg installation provides {args.codec}; install a suitable build or choose --codec h264_nvenc')
+    writer = FFMpegWriter(fps=args.fps, codec=args.codec, extra_args=['-pix_fmt', 'yuv420p'])
+    surface = None
     try:
-        A = np.loadtxt(filename)
-    except:
-        print(f"Could not read file {filename}")
-        return
-
-    # Reshape data into B matrix
-    B = np.zeros((LIMX, LIMY))
-    for a in range(LIMX):
-        B[a, :] = A[a*LIMY:(a+1)*LIMY]
-
-    # Create new surface plot
-    surf = ax.plot_surface(Y, X, B, cmap='viridis')
-
-    # Set labels and limits
-    ax.set_title(f'Time = {iter*delT:.2e}sec, Step: {
-                 iter} \nPlot of z-component of E-field under Patch Antenna and Microstrip')
-
-    # Convert plot to image and save
-    buf = io.BytesIO()
-    plt.savefig(buf, format='png', dpi=100)
-    with open(f'buffer/{iter:04d}.png', 'wb') as f:
-        f.write(buf.getvalue())
-    buf.close()
-    plt.close(fig)
+        with writer.saving(fig, str(output), dpi=100):
+            for index in tqdm(indices, desc='Rendering'):
+                if surface is not None:
+                    surface.remove()
+                surface = ax.plot_surface(xx, yy, fields[index], cmap='viridis',
+                                          vmin=-1, vmax=1)
+                step = index * meta['sample_every']
+                ax.set_title(f'Ez under the patch | step {step} | t = {step * meta["dt"] * 1e12:.3f} ps')
+                writer.grab_frame()
+    finally:
+        plt.close(fig)
+    print(output)
 
 
-# Main animation loop
-with mp.Pool(processes=16) as pool:
-    list(tqdm(pool.imap(process_frame, range(frame)),
-         total=frame, desc="Processing frames"))
-
-print("Done!")
+if __name__ == '__main__':
+    main()

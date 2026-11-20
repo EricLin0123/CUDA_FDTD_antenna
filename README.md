@@ -6,69 +6,119 @@ by 林萬荃 at National Taiwan University
 
 This project is a CUDA-accelerated FDTD simulation of a patch antenna. The simulation is based on the paper by Sheen et al. [1]. The original code is written in C++ and is available from [Pete Bevelacqua's website](https://www.antenna-theory.com/antennas/patches/patch6.php) [2]. The original code is modified to use CUDA for acceleration.
 
-### Pre-requisites
+### Requirements
 
-- CUDA Toolkit 12.0
-- Python 3.11
-- ffmpeg with h264_nvenc codec
-- matplotlib
-- numpy
-- tqdm
+- NVIDIA GPU and a working NVIDIA driver (`nvidia-smi`)
+- CUDA Toolkit (`nvcc`), GNU Make, and a compatible C++ compiler
+- Python 3.10 or newer with NumPy, Matplotlib, and tqdm
+- FFmpeg for video export; the default uses `libx264`. NVIDIA encoding is optional.
 
-## Usage
+Verified locally with an RTX 4060, CUDA 12.9, GCC 13.3, and Python 3.12.
+No Python CUDA package is required.
 
-To compile the code, run the following command:
+## Run the simulation
 
-```bash
-make main
-```
-
-or
+Optional isolated Python environment:
 
 ```bash
-nvcc -o fdtd main.cu -lcuda -lcudart
+python3 -m venv .venv
+source .venv/bin/activate
+python3 -m pip install -r requirements.txt
 ```
 
-Create a junk, buffer directory to store the output files:
+Run from the project directory:
 
 ```bash
-mkdir junk
-mkdir buffer
+python3 simulate.py
+# Or choose a new output directory:
+python3 simulate.py --output runs/my-experiment
+# Shell wrapper accepts the same arguments:
+bash run.sh --output runs/another-experiment
 ```
 
-Go to the junk directory and run the executable:
+The runner builds separate antenna and strip-reference executables, then runs
+both. Existing run directories are rejected to prevent accidental overwrites.
+If execution fails, inspect `simulation.log` in the relevant subdirectory;
+`metadata.json` records whether the run completed. GPU access must be available
+to the process (a sandbox or container may hide GPU devices).
+
+```text
+runs/my-experiment/
+  metadata.json
+  antenna/
+    fields.npy
+    Incident.txt
+    Gauss.txt
+    simulation.log
+  strip/
+    fields.npy
+    Incident_strip.txt
+    Gauss.txt
+    simulation.log
+```
+
+`fields.npy` contains float64 Ez samples in `(frame, x, y)` order. Each file is
+about 73 MiB, with 1,600 frames of 60 × 100 samples. It stores the z=2 slice
+every five simulation steps, starting at step zero after the first field update.
+It preserves full double precision instead of rounding fields to six decimals.
+NumPy can read individual frames without loading the entire array:
+
+```python
+import numpy as np
+fields = np.load("runs/my-experiment/antenna/fields.npy", mmap_mode="r")
+frame = fields[100]
+```
+
+Grid spacing, time step, frame interval, and run status are in `metadata.json`.
+The numerical grid and solver parameters remain compile-time constants. If you
+change them in `main.cu`, update the metadata constants in `simulate.py` as well.
+
+## Plot and export
 
 ```bash
-cd junk
-../fdtd
-cd ..
+python3 plotEz.py runs/my-experiment
+python3 plotCPU.py runs/my-experiment
+# Quick preview:
+python3 plotCPU.py runs/my-experiment --max-frames 30 --output preview.mp4
+# Optional NVIDIA encoder:
+python3 plotCPU.py runs/my-experiment --codec h264_nvenc --output gpu.mp4
 ```
 
-The output files are in the junk directory. To visualize the results, run the following command:
+The waveform and reflection plots are saved as PNGs inside the run directory.
+The animation is streamed directly to FFmpeg as `fields.mp4`; no intermediate
+PNG directory is needed. `--stride 5` renders every fifth stored frame.
+Video output paths must not already exist. Plotting works without a display.
+
+The reflection calculation retains the original `/3` scaling and Gaussian-source
+normalization. It is not a newly calibrated port S11 calculation. Frequencies
+with negligible source energy are masked to avoid meaningless division results.
+Animation timestamps include the five-step sampling interval.
+
+To display the original antenna geometry interactively:
 
 ```bash
-python plotCPU.py
+python3 model.py
 ```
 
-To concatenate the output PNG files into a video, run the following command:
+## Build targets and original CPU reference
 
 ```bash
-ffmpeg -hwaccel cuda -framerate 60 -pattern_type glob -i 'buffer/*.png' -c:v h264_nvenc -preset fast output.mp4
+make main    # build/fdtd and build/fdtd-strip
+make cpu     # build/fdtd-cpu
+make clean   # remove compiled binaries; keep simulation results
 ```
 
-To see the resultant return-loss of the antenna, run the following command:
+The CUDA executables write into their current working directory. Prefer the
+Python runner, which isolates outputs and supplies metadata. The original CPU
+solver is retained for reference and still writes the legacy text files; it is
+not integrated into the new plotting workflow. Old `junk/` output is likewise
+not consumed by the new plotters. Existing images and the report are retained.
+
+To check the NumPy file writer and result validation:
 
 ```bash
-python plotEz.py
+python3 -m unittest discover -s tests -v
 ```
-
-Model.py just recreate the model of the patch antenna.
-
-```bash
-python model.py
-```
-
-> Note that the above command require you to install ffmpeg with the `h264_nvenc` codec. Check Nvidia website for more information.
 
 ## Results
 

@@ -16,6 +16,10 @@
 
 #include <stdio.h>
 #include <math.h>
+#include <stdlib.h>
+#include "output.h"
+
+#define CUDA_CHECK(call) do { cudaError_t status = (call); if (status != cudaSuccess) { fprintf(stderr, "%s: %s\n", #call, cudaGetErrorString(status)); exit(EXIT_FAILURE); } } while (0)
 
 /* dimensions in the X, Y, and Z directions */
 #define LIMX 60
@@ -136,17 +140,19 @@ int main()
     h_delT = 0.441e-12;
     h_T = 15.e-12;
     h_T0 = 3. * h_T;
-    FILE *dump;
+    int device_count = 0;
+    CUDA_CHECK(cudaGetDeviceCount(&device_count));
+    if (!device_count) { fprintf(stderr, "No CUDA GPU available\n"); return EXIT_FAILURE; }
+    FieldOutput fields("fields.npy", (totalT + 4) / 5, LIMX, LIMY);
     cudaError_t err;
-    char basename[80] = "junk", filename[100];
 #ifdef STRIP
     char outputF[20] = "Incident_strip.txt";
 #else
     char outputF[20] = "Incident.txt";
 #endif
     char outputGauss[20] = "Gauss.txt";
-    outGauss = fopen(outputGauss, "w+");
-    out = fopen(outputF, "w+");
+    outGauss = checked_open(outputGauss, "w");
+    out = checked_open(outputF, "w");
 
     InitializeData<<<1, 1>>>();
     Initialize();
@@ -157,19 +163,20 @@ int main()
         exit(EXIT_FAILURE);
     }
     h_EzOut = (double *)malloc(totalT * sizeof(double));
+    if (!h_EzOut) { perror("malloc"); return EXIT_FAILURE; }
 
     /*Do time stepping */
     cudaEvent_t start, stop;
     float milliseconds = 0;
 
-    cudaEventCreate(&start);
-    cudaEventCreate(&stop);
+    CUDA_CHECK(cudaEventCreate(&start));
+    CUDA_CHECK(cudaEventCreate(&stop));
 
-    cudaEventRecord(start);
+    CUDA_CHECK(cudaEventRecord(start));
 
     for (h_ntime = 0; h_ntime < totalT; h_ntime++)
     {
-        printf("Doing time step %d\r", h_ntime);
+        if (h_ntime % 1000 == 0) printf("Time step %d / %d\n", h_ntime, totalT);
 
         UpdateEfields();
         FirstABC();
@@ -188,27 +195,24 @@ int main()
                 fprintf(stderr, "Failed to copy vector Ez from device to host (error code %s)!\n", cudaGetErrorString(err));
                 exit(EXIT_FAILURE);
             }
-            sprintf(filename, "%s.%d", basename, h_frame++);
-            dump = fopen(filename, "w");
+            double plane[LIMX * LIMY];
             for (hi = 0; hi < LIMX; hi++)
                 for (hj = 0; hj < LIMY; hj++)
-                {
-                    fprintf(dump, "%lf\n", h_Ez[hi][hj][hk]);
-                }
-
-            fclose(dump);
+                    plane[hi * LIMY + hj] = h_Ez[hi][hj][hk];
+            fields.write(plane, LIMX * LIMY);
         }
         ntimeplus1<<<1, 1>>>();
+        CUDA_CHECK(cudaGetLastError());
     } /*End of time stepping*/
 
-    cudaEventRecord(stop);
-    cudaEventSynchronize(stop);
+    CUDA_CHECK(cudaEventRecord(stop));
+    CUDA_CHECK(cudaEventSynchronize(stop));
 
-    cudaEventElapsedTime(&milliseconds, start, stop);
+    CUDA_CHECK(cudaEventElapsedTime(&milliseconds, start, stop));
     printf("Time for the loop: %f ms\n", milliseconds);
 
-    cudaEventDestroy(start);
-    cudaEventDestroy(stop);
+    CUDA_CHECK(cudaEventDestroy(start));
+    CUDA_CHECK(cudaEventDestroy(stop));
     err = cudaMemcpy(h_EzOut, d_EzOut, totalT * sizeof(double), cudaMemcpyDeviceToHost);
     if (err != cudaSuccess)
     {
@@ -222,6 +226,9 @@ int main()
 
     fclose(out);
     fclose(outGauss);
+    fields.close();
+    CUDA_CHECK(cudaFree(d_EzOut));
+    free(h_EzOut);
 }
 
 /*  Function:  Initialize Fields   */
